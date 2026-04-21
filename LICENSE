@@ -26,3 +26,23 @@ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 OF THE POSSIBILITY OF SUCH DAMAGE.
 
+---------------------------------------------------------------------
+RIVOTEK LICENSE NOTICE
+---------------------------------------------------------------------
+Copyright (c) 2026 Rivotek Technology. All rights reserved.
+
+This license statement applies to Rivotek-owned integration and binary-delivery
+content in this repository.
+
+Covered directories:
+- boards/r528/drivers/
+- libs/drivers/r528/
+- libs/board/r528s3-gemini-s1/
+
+Notes:
+- Source files removed from boards/r528/drivers are replaced by prebuilt
+	libraries for binary-only distribution.
+- Build integration remains in repository to keep community users able to
+	download and compile with provided prebuilt libraries.
+- Files under other directories continue following their original
+	upstream/vendor licensing terms unless explicitly stated otherwise.
