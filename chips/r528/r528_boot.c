@@ -41,7 +41,7 @@
 #include <sys/mount.h>
 #include <nuttx/config.h>
 #include <nuttx/audio/audio.h>
-#include <nuttx/lib/modlib.h>
+#include <nuttx/lib/elf.h>
 #ifdef CONFIG_VIDEO_FB
 #include <nuttx/video/fb.h>
 #endif
