@@ -136,3 +136,24 @@ define POSTBUILD
         cp vela.bin $(AW_LICHEE_DIR)/board/r528s3/gemini-s1_nand/configs/bl.fex; \
     fi
 endef
+
+#---------------------------------------------------------------------------
+# QuickApp prebuilt libraries (only linked when CONFIG_QUICKAPP=y)
+#
+# These are prebuilt static libraries from the libs_openvela_vela repository,
+# compiled for the armv7a (Cortex-A7 + VFPv4 + NEON) architecture which is
+# binary-compatible with the R528 SoC. The same prebuilt set is used by the
+# goldfish-armeabi-v7a-ap board.
+#---------------------------------------------------------------------------
+ifeq ($(CONFIG_QUICKAPP),y)
+QUICKAPP_PREBUILT_DIR := $(TOPDIR)/../vendor/openvela/boards/vela/libs/armv7a_cmake
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libapps_vapp.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libquickapp.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libquickappfeatures.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libquickapp_inspector.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libgui_wrapper.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibfeature.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libuikit.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibmedia.a
+EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibpfw.a
+endif
