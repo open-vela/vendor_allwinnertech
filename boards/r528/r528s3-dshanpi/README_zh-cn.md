@@ -94,9 +94,9 @@ git checkout dev-ai-contest-2026
 把板级开发板放入openvela-trunk5.5目录：
 
 ```shell
-cp ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi  ~/openvela_trunk5.5/vendor/allwinnertech/boards/r528/
+cp -rf ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi  ~/openvela_trunk5.5/vendor/allwinnertech/boards/r528/
 
-cp  ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/vendor/allwinnertech/lichee/board/r528s3/
+cp  -rf ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/vendor/allwinnertech/lichee/board/r528s3/
 ```
 
 
@@ -106,7 +106,8 @@ cp  ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/
 执行如下命令打补丁：
 
 ```shell
-~/openvela_trunk5.5
+cd ~/openvela_trunk5.5
+
 patch -p1 < ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi/dshanpi_for_trunk5.5.patch
 ```
 
@@ -134,7 +135,8 @@ openvela 工程根目录的 `build.sh` 是统一编译入口。以基础 `nsh` �
 执行如下命令打包：
 
 ```shell
-cd vendor/allwinnertech/lichee/
+cd  ~/openvela_trunk5.5/vendor/allwinnertech/lichee/
+source  envsetup.sh
 lunch_nuttx 
 
 You're building on Linux

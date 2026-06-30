@@ -88,9 +88,9 @@ git checkout dev-ai-contest-2026
 Copy the board package into the `openvela-trunk5.5` directory:
 
 ```shell
-cp ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi  ~/openvela_trunk5.5/vendor/allwinnertech/boards/r528/
+cp -rf ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi  ~/openvela_trunk5.5/vendor/allwinnertech/boards/r528/
 
-cp  ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/vendor/allwinnertech/lichee/board/r528s3/
+cp  -rf ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/vendor/allwinnertech/lichee/board/r528s3/
 ```
 
 ## Applying the Patch
@@ -98,7 +98,8 @@ cp  ~/vendor_allwinnertech/lichee/board/r528s3/dshanpi_nand ~/openvela_trunk5.5/
 Run the following commands to apply the patch:
 
 ```shell
-~/openvela_trunk5.5
+cd ~/openvela_trunk5.5
+
 patch -p1 < ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi/dshanpi_for_trunk5.5.patch
 ```
 
@@ -122,8 +123,9 @@ patch -p1 < ~/vendor_allwinnertech/boards/r528/r528s3-dshanpi/dshanpi_for_trunk5
 Run the following commands to package the firmware:
 
 ```shell
-cd vendor/allwinnertech/lichee/
-lunch_nuttx
+cd  ~/openvela_trunk5.5/vendor/allwinnertech/lichee/
+source  envsetup.sh
+lunch_nuttx 
 
 You're building on Linux
 
@@ -133,12 +135,12 @@ Lunch menu... pick a combo:
      3. r528s3-gemini-s1
      4. r528s3-velaevb1
 
-Which would you like?: 1  # Select 1 for r528s3-dshanpi
+Which would you like?: 1  # 选择1，对应r528s3-dshanpi
 
 
-pack  # Packaging command
+pack  # 打包命令
 
-# Generates the following file
+# 生成如下文件
 # /home/ubuntu/openvela_trunk5.5/vendor/allwinnertech/lichee/out/r528s3/dshanpi_nand/rtos_nuttx_r528s3-dshanpi_uart0_256Mnand.img
 
 ```
