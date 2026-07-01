@@ -71,7 +71,7 @@ Run the following commands to download the `trunk5.5` source tree:
 mkdir ~/openvela_trunk5.5
 cd ~/openvela_trunk5.5/
 
-repo init -u https://gitee.com/open-vela/manifests.git -b trunk -m openvela.xml --repo-url=https://mirrors.tuna.tsinghua.edu.cn/git/git-repo/ --git-lfs
+repo init -u https://gitee.com/open-vela/manifests.git -b trunk -m tags/trunk-5.5.xml --repo-url=https://mirrors.tuna.tsinghua.edu.cn/git/git-repo/ --git-lfs
 
 repo sync -j 8
 ```
