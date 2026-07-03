@@ -224,9 +224,9 @@ static int soc_pcm_init_runtime_hw_constrains(struct snd_pcm_hardware *hw,
 	cons->intervals[SND_PCM_HW_PARAM_BUFFER_BYTES].range.max = hw->buffer_bytes_max;
 
 	cons->intervals[SND_PCM_HW_PARAM_SAMPLE_BITS].range.min =
-			(uint32_t)snd_pcm_format_physical_width(__pcm_ffs(hw->formats));
+			(uint32_t)sunxi_snd_pcm_format_physical_width(__pcm_ffs(hw->formats));
 	cons->intervals[SND_PCM_HW_PARAM_SAMPLE_BITS].range.max =
-			(uint32_t)snd_pcm_format_physical_width(__fls(hw->formats));
+			(uint32_t)sunxi_snd_pcm_format_physical_width(__fls(hw->formats));
 
 	return 0;
 }

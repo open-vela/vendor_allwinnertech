@@ -1,0 +1,2 @@
+This board uses a placeholder AP payload for pack resource staging.
+The NuttX-only dshanpi image does not consume this file at runtime.

@@ -1,221 +1,88 @@
 domain: MicDomain
 	conf: enable
 		UsingDevices Includes mic
-		FFmpegCommand = pcm10c,unmute;pcm11c,unmute;pcm12c,unmute;
+		FFmpegCommand = pcm0c,unmute,;
 	conf: disable
 		ALL
-		FFmpegCommand = pcm10c,mute;pcm11c,mute;pcm12c,mute;
-
-domain: A2dpDomain
-	conf: enable
-		UsingDevices Includes a2dpsnk
-		FFmpegCommand = a2dpsnk,start;
-	conf: disable
-		ALL
-		FFmpegCommand = a2dpsnk,stop;
-
-domain: A2dpsnkVolumeDomain
-	conf: 0
-		A2dpsnkVolume In 0
-		FFmpegCommand = VolA2dpsnk,volume,0;
-	conf: 1
-		A2dpsnkVolume In 1
-		FFmpegCommand = VolA2dpsnk,volume,-60dB;
-	conf: 2
-		A2dpsnkVolume In 2
-		FFmpegCommand = VolA2dpsnk,volume,-45dB;
-	conf: 3
-		A2dpsnkVolume In 3
-		FFmpegCommand = VolA2dpsnk,volume,-38dB;
-	conf: 4
-		A2dpsnkVolume In 4
-		FFmpegCommand = VolA2dpsnk,volume,-33dB;
-	conf: 5
-		A2dpsnkVolume In 5
-		FFmpegCommand = VolA2dpsnk,volume,-29dB;
-	conf: index-%A2dpsnkVolume
-		A2dpsnkVolume In [6,14]
-		FFmpegCommand = VolA2dpsnk,volume,10^((2*%A2dpsnkVolume%-38)/20);
-	conf: 16
-		A2dpsnkVolume In 16
-		FFmpegCommand = VolA2dpsnk,volume,-7dB;
-	conf: 17
-		A2dpsnkVolume In 17
-		FFmpegCommand = VolA2dpsnk,volume,-6dB;
-	conf: 18
-		A2dpsnkVolume In 18
-		FFmpegCommand = VolA2dpsnk,volume,-5dB;
-	conf: 19
-		A2dpsnkVolume In 19
-		FFmpegCommand = VolA2dpsnk,volume,-4dB;
-	conf: 20
-		A2dpsnkVolume In 20
-		FFmpegCommand = VolA2dpsnk,volume,-3dB;
-
-domain: RingVolumeDomain
-	conf: 0
-		RingVolume In 0
-		FFmpegCommand = VolRing,volume,0;
-	conf: 1
-		RingVolume In 1
-		FFmpegCommand = VolRing,volume,-60dB;
-	conf: 2
-		RingVolume In 2
-		FFmpegCommand = VolRing,volume,-45dB;
-	conf: 3
-		RingVolume In 3
-		FFmpegCommand = VolRing,volume,-38dB;
-	conf: 4
-		RingVolume In 4
-		FFmpegCommand = VolRing,volume,-33dB;
-	conf: 5
-		RingVolume In 5
-		FFmpegCommand = VolRing,volume,-29dB;
-	conf: index-%RingVolume
-		RingVolume In [6,15]
-		FFmpegCommand = VolRing,volume,10^((2*%RingVolume%-38)/20);
-	conf: 16
-		RingVolume In 16
-		FFmpegCommand = VolRing,volume,-7dB;
-	conf: 17
-		RingVolume In 17
-		FFmpegCommand = VolRing,volume,-6dB;
-	conf: 18
-		RingVolume In 18
-		FFmpegCommand = VolRing,volume,-5dB;
-	conf: 19
-		RingVolume In 19
-		FFmpegCommand = VolRing,volume,-4dB;
-	conf: 20
-		RingVolume In 20
-		FFmpegCommand = VolRing,volume,-3dB;
+		FFmpegCommand = pcm0c,mute,;
 
 domain: MusicVolumeDomain
-	conf: 0
-		MusicVolume In 0
-		FFmpegCommand = VolMusic,volume,0;
-	conf: 1
-		MusicVolume In 1
-		FFmpegCommand = VolMusic,volume,-60dB;
-	conf: 2
-		MusicVolume In 2
-		FFmpegCommand = VolMusic,volume,-45dB;
-	conf: 3
-		MusicVolume In 3
-		FFmpegCommand = VolMusic,volume,-38dB;
-	conf: 4
-		MusicVolume In 4
-		FFmpegCommand = VolMusic,volume,-33dB;
-	conf: 5
-		MusicVolume In 5
-		FFmpegCommand = VolMusic,volume,-29dB;
+	conf: mute
+		ANY
+			MuteMode   Is on
+			MusicVolume In 0
+		FFmpegCommand = Music,volume,0;
 	conf: index-%MusicVolume
-		MusicVolume In [6,15]
-		FFmpegCommand = VolMusic,volume,10^((2*%MusicVolume%-38)/20);
-	conf: 16
-		MusicVolume In 16
-		FFmpegCommand = VolMusic,volume,-7dB;
-	conf: 17
-		MusicVolume In 17
-		FFmpegCommand = VolMusic,volume,-6dB;
-	conf: 18
-		MusicVolume In 18
-		FFmpegCommand = VolMusic,volume,-5dB;
-	conf: 19
-		MusicVolume In 19
-		FFmpegCommand = VolMusic,volume,-4dB;
-	conf: 20
-		MusicVolume In 20
-		FFmpegCommand = VolMusic,volume,-3dB;
+		MusicVolume In [1,9]
+		FFmpegCommand = Music,volume,10^(-4*(10-%MusicVolume%)/20);
+	conf: 10
+		MusicVolume In 10
+		FFmpegCommand = Music,volume,1;
 
 domain: MediaVolumeDomain
-	conf: 0
+	conf: mute
 		MediaVolume In 0
-		FFmpegCommand = VolMedia,volume,0;
-	conf: 1
-		MediaVolume In 1
-		FFmpegCommand = VolMedia,volume,-60dB;
-	conf: 2
-		MediaVolume In 2
-		FFmpegCommand = VolMedia,volume,-45dB;
-	conf: 3
-		MediaVolume In 3
-		FFmpegCommand = VolMedia,volume,-38dB;
-	conf: 4
-		MediaVolume In 4
-		FFmpegCommand = VolMedia,volume,-33dB;
-	conf: 5
-		MediaVolume In 5
-		FFmpegCommand = VolMedia,volume,-29dB;
+		FFmpegCommand = Media,volume,0;
 	conf: index-%MediaVolume
-		MediaVolume In [6,15]
-		FFmpegCommand = VolMedia,volume,10^((2*%MediaVolume%-38)/20);
-	conf: 16
-		MediaVolume In 16
-		FFmpegCommand = VolMedia,volume,-7dB;
-	conf: 17
-		MediaVolume In 17
-		FFmpegCommand = VolMedia,volume,-6dB;
-	conf: 18
-		MediaVolume In 18
-		FFmpegCommand = VolMedia,volume,-5dB;
-	conf: 19
-		MediaVolume In 19
-		FFmpegCommand = VolMedia,volume,-4dB;
-	conf: 20
-		MediaVolume In 20
-		FFmpegCommand = VolMedia,volume,-3dB;
+		MediaVolume In [1,9]
+		FFmpegCommand = Media,volume,10^(-4*(10-%MediaVolume%)/20);
+	conf: 10
+		MediaVolume In 10
+		FFmpegCommand = Media,volume,1;
+
+domain: RingVolumeDomain
+	conf: mute
+		ANY
+			MuteMode   Is on
+			RingVolume In 0
+		FFmpegCommand = Ring,volume,0;
+	conf: index-%RingVolume
+		RingVolume In [1,9]
+		FFmpegCommand = Ring,volume,10^(-4*(10-%RingVolume%)/20);
+	conf: 10
+		RingVolume In 10
+		FFmpegCommand = Ring,volume,1;
 
 domain: AlarmVolumeDomain
-	conf: 0
+	conf: mute
 		AlarmVolume In 0
-		FFmpegCommand = VolAlarm,volume,0;
-	conf: 1
-		AlarmVolume In 1
-		FFmpegCommand = VolAlarm,volume,-60dB;
-	conf: 2
-		AlarmVolume In 2
-		FFmpegCommand = VolAlarm,volume,-45dB;
-	conf: 3
-		AlarmVolume In 3
-		FFmpegCommand = VolAlarm,volume,-38dB;
-	conf: 4
-		AlarmVolume In 4
-		FFmpegCommand = VolAlarm,volume,-33dB;
-	conf: 5
-		AlarmVolume In 5
-		FFmpegCommand = VolAlarm,volume,-29dB;
+		FFmpegCommand = Alarm,volume,0;
 	conf: index-%AlarmVolume
-		AlarmVolume In [6,15]
-		FFmpegCommand = VolAlarm,volume,10^((2*%AlarmVolume%-38)/20);
-	conf: 16
-		AlarmVolume In 16
-		FFmpegCommand = VolAlarm,volume,-7dB;
-	conf: 17
-		AlarmVolume In 17
-		FFmpegCommand = VolAlarm,volume,-6dB;
-	conf: 18
-		AlarmVolume In 18
-		FFmpegCommand = VolAlarm,volume,-5dB;
-	conf: 19
-		AlarmVolume In 19
-		FFmpegCommand = VolAlarm,volume,-4dB;
-	conf: 20
-		AlarmVolume In 20
-		FFmpegCommand = VolAlarm,volume,-3dB;
+		AlarmVolume In [1,9]
+		FFmpegCommand = Alarm,volume,10^(-4*(10-%AlarmVolume%)/20);
+	conf: 10
+		AlarmVolume In 10
+		FFmpegCommand = Alarm,volume,1;
 
-domain: AcapGainDomain
-	conf: index-%AcapGain
-		AcapGain In [1,10]
-		FFmpegCommand = VolAcap,volume,%AcapGain%;
+domain: NotifyVolumeDomain
+	conf: mute
+		NotifyVolume In 0
+		FFmpegCommand = Notify,volume,0;
+	conf: index-%NotifyVolume
+		NotifyVolume In [1,9]
+		FFmpegCommand = Notify,volume,10^(-4*(10-%NotifyVolume%)/20);
+	conf: 10
+		NotifyVolume In 10
+		FFmpegCommand = Notify,volume,1;
 
-domain: VoiceChangeDomain
-	conf: normal
-		VoiceChangeMode Is normal
-		FFmpegCommand = VoiceChange,mode,0;
-	conf: dashu
-		VoiceChangeMode Is dashu
-		FFmpegCommand = VoiceChange,mode,1;
-	conf: xiaochou
-		VoiceChangeMode Is xiaochou
-		FFmpegCommand = VoiceChange,mode,4;
+domain: TTSVolumeDomain
+	conf: mute
+		TTSVolume In 0
+		FFmpegCommand = TTS,volume,0;
+	conf: index-%TTSVolume
+		TTSVolume In [1,9]
+		FFmpegCommand = TTS,volume,10^(-4*(10-%TTSVolume%)/20);
+	conf: 10
+		TTSVolume In 10
+		FFmpegCommand = TTS,volume,1;
+
+domain: SportVolumeDomain
+	conf: mute
+		SportVolume In 0
+		FFmpegCommand = Sport,volume,0;
+	conf: index-%SportVolume
+		SportVolume In [1,9]
+		FFmpegCommand = Sport,volume,10^(-4*(10-%SportVolume%)/20);
+	conf: 10
+		SportVolume In 10
+		FFmpegCommand = Sport,volume,1;

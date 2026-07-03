@@ -46,6 +46,10 @@ adbd &
 kvdbd &
 #endif
 
+#ifdef CONFIG_MEDIA_SERVER
+mediad &
+#endif
+
 set resetcause `resetcause`
 echo $resetcause
 

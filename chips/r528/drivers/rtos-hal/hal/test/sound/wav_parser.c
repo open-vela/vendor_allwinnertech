@@ -146,7 +146,7 @@ void create_wav(wav_header_t *header, unsigned int format, unsigned int rate, un
 	header->numChannels = channels;
 	header->sampleRate = rate;
 	header->bytesPerSecond =
-		rate * snd_pcm_format_physical_width(format) / 8;
+		rate * sunxi_snd_pcm_format_physical_width(format) / 8;
 	header->blockAlign = align * channels;
 	header->bitsPerSample = bits;
 	header->dataType = WAV_DATA;

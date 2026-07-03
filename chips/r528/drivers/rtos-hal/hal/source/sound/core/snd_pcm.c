@@ -2017,7 +2017,7 @@ int ksnd_pcm_hw_params(void *substream_handle, void *params_wrapper)
 	runtime->buffer_size = params_buffer_size(params);
 	runtime->can_paused = params->can_paused;
 
-	bits = snd_pcm_format_physical_width(runtime->format);
+	bits = sunxi_snd_pcm_format_physical_width(runtime->format);
 	runtime->sample_bits = bits;
 	bits *= runtime->channels;
 	runtime->frame_bits = bits;
@@ -2496,7 +2496,7 @@ int ksnd_pcm_channel_info(void *substream_handle, void *info_wrapper)
 	}
 	info->addr = (void *)runtime->dma_addr;
 
-	width = snd_pcm_format_physical_width(runtime->format);
+	width = sunxi_snd_pcm_format_physical_width(runtime->format);
 	switch (runtime->access) {
 	case SND_PCM_ACCESS_MMAP_INTERLEAVED:
 	case SND_PCM_ACCESS_RW_INTERLEAVED:

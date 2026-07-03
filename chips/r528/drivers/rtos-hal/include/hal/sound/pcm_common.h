@@ -439,7 +439,7 @@ static inline unsigned int params_buffer_time(const struct snd_pcm_hw_params *p)
 }
 
 
-int snd_pcm_format_physical_width(snd_pcm_format_t format);
+int sunxi_snd_pcm_format_physical_width(snd_pcm_format_t format);
 
 
 #define SND_MASK_BITS 32

@@ -51,7 +51,7 @@ static int setSoundDeviceParams(SoundCtrlContext* sc)
 {
     int ret = 0;
     logd("setSoundDeviceParams()\n");
-    sc->bytes_per_sample = sc->nChannelNum*snd_pcm_format_physical_width(sc->alsa_format) / 8;
+    sc->bytes_per_sample = sc->nChannelNum*sunxi_snd_pcm_format_physical_width(sc->alsa_format) / 8;
     sc->alsa_fragcount = 8;//cache count
     if(sc->nSampleRate==44100)
         sc->chunk_size = 1470;//each cache size,unit : sample
@@ -207,7 +207,7 @@ void TSoundDeviceSetFormat(SoundCtrl* s, CdxPlaybkCfg* cfg){
     	sc->nSampleRate = cfg->nSamplerate;
     	sc->nChannelNum = cfg->nChannels;
     	sc->alsa_format = SND_PCM_FORMAT_S16_LE;
-    	sc->bytes_per_sample = sc->nChannelNum*snd_pcm_format_physical_width(sc->alsa_format) / 8;
+    	sc->bytes_per_sample = sc->nChannelNum*sunxi_snd_pcm_format_physical_width(sc->alsa_format) / 8;
     	logd("TSoundDeviceSetFormat()>>>sample_rate:%d,channel_num:%d,sc->bytes_per_sample:%d\n",
     		cfg->nSamplerate,cfg->nChannels,sc->bytes_per_sample);
     }

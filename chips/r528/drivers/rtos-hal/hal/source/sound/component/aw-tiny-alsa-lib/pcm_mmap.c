@@ -73,7 +73,7 @@ void snd_pcm_mmap_hw_forward(snd_pcm_t *pcm, snd_pcm_uframes_t frames)
 	*pcm->hw.ptr = hw_ptr;
 }
 
-static snd_pcm_sframes_t snd_pcm_mmap_write_areas(snd_pcm_t *pcm,
+static snd_pcm_sframes_t sunxi_snd_pcm_mmap_write_areas(snd_pcm_t *pcm,
 						  const snd_pcm_channel_area_t *areas,
 						  snd_pcm_uframes_t offset,
 						  snd_pcm_uframes_t size)
@@ -106,15 +106,15 @@ static snd_pcm_sframes_t snd_pcm_mmap_write_areas(snd_pcm_t *pcm,
 	return (snd_pcm_sframes_t)xfer;
 }
 
-snd_pcm_sframes_t snd_pcm_mmap_writei(snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size)
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_writei(snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size)
 {
 	snd_pcm_channel_area_t areas[pcm->channels];
 	snd_pcm_areas_from_buf(pcm, areas, (void*)buffer);
 	return snd_pcm_write_areas(pcm, areas, 0, size,
-				   snd_pcm_mmap_write_areas);
+				   sunxi_snd_pcm_mmap_write_areas);
 }
 
-static snd_pcm_sframes_t snd_pcm_mmap_read_areas(snd_pcm_t *pcm,
+static snd_pcm_sframes_t sunxi_snd_pcm_mmap_read_areas(snd_pcm_t *pcm,
 						 const snd_pcm_channel_area_t *areas,
 						 snd_pcm_uframes_t offset,
 						 snd_pcm_uframes_t size)
@@ -146,12 +146,12 @@ static snd_pcm_sframes_t snd_pcm_mmap_read_areas(snd_pcm_t *pcm,
 	return (snd_pcm_sframes_t)xfer;
 }
 
-snd_pcm_sframes_t snd_pcm_mmap_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t size)
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t size)
 {
 	snd_pcm_channel_area_t areas[pcm->channels];
 	snd_pcm_areas_from_buf(pcm, areas, buffer);
 	return snd_pcm_read_areas(pcm, areas, 0, size,
-				  snd_pcm_mmap_read_areas);
+				  sunxi_snd_pcm_mmap_read_areas);
 }
 
 int snd_pcm_channel_info_shm(snd_pcm_t *pcm, snd_pcm_channel_info_t *info, int shmid)
@@ -176,7 +176,7 @@ int snd_pcm_channel_info_shm(snd_pcm_t *pcm, snd_pcm_channel_info_t *info, int s
 	return 0;
 }
 
-int snd_pcm_mmap(snd_pcm_t *pcm)
+int sunxi_snd_pcm_mmap(snd_pcm_t *pcm)
 {
 	int err;
 	unsigned int c;
@@ -290,7 +290,7 @@ int snd_pcm_mmap(snd_pcm_t *pcm)
 	return 0;
 }
 
-int snd_pcm_munmap(snd_pcm_t *pcm)
+int sunxi_snd_pcm_munmap(snd_pcm_t *pcm)
 {
 	int err;
 	unsigned int c;

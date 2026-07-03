@@ -106,7 +106,7 @@ static struct pcm_format_data pcm_formats[(int)SND_PCM_FORMAT_LAST+1] = {
 };
 
 
-int snd_pcm_format_physical_width(snd_pcm_format_t format)
+int sunxi_snd_pcm_format_physical_width(snd_pcm_format_t format)
 {
 	int val;
 	if ((int)format < 0 || (int)format > (int)SND_PCM_FORMAT_LAST)

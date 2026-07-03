@@ -180,7 +180,6 @@ int snd_thread_mutex_lock(snd_pcm_mutex_t mutex)
 		return -EFAULT;
 	}
 	awalsa_debug("\n");
-	syslog(LOG_ERR, "mutex:%p\n", mutex);
 	ret = hal_mutex_lock(mutex);
 	if (ret == HAL_OK)
 		return 0;
@@ -370,12 +369,12 @@ int snd_vela_pcm_close(snd_pcm_t *pcm)
 			res = ret;
 	}
 	if (pcm->mmap_channels)
-		snd_pcm_munmap(pcm);
+		sunxi_snd_pcm_munmap(pcm);
 	assert(pcm->ops->close);
 	ret = pcm->ops->close(pcm->op_arg);
 	if (ret < 0)
 		res = ret;
-	ret = snd_pcm_free(pcm);
+	ret = vela_snd_pcm_free(pcm);
 	if (ret < 0)
 		res = ret;
 
@@ -465,7 +464,7 @@ int snd_vela_pcm_hw_params_set_format(snd_pcm_t *pcm, snd_pcm_hw_params_t *param
 
 	/* set sample bits */
 	snd_pcm_hw_param_change(params, SND_PCM_HW_PARAM_SAMPLE_BITS);
-	ret = _snd_pcm_hw_param_set(params, SND_PCM_HW_PARAM_SAMPLE_BITS, snd_pcm_format_physical_width(format));
+	ret = _snd_pcm_hw_param_set(params, SND_PCM_HW_PARAM_SAMPLE_BITS, sunxi_snd_pcm_format_physical_width(format));
 	if (ret < 0)
 		return ret;
 
@@ -621,7 +620,7 @@ int _snd_pcm_hw_params_internal(snd_pcm_t *pcm, snd_pcm_hw_params_t *params)
 	snd_vela_pcm_hw_params_get_period_time(params, &pcm->period_time, NULL);
 	snd_vela_pcm_hw_params_get_period_size(params, &pcm->period_size, NULL);
 	snd_vela_pcm_hw_params_get_buffer_size(params, &pcm->buffer_size);
-	pcm->sample_bits = snd_pcm_format_physical_width(pcm->format);
+	pcm->sample_bits = sunxi_snd_pcm_format_physical_width(pcm->format);
 	pcm->frame_bits = pcm->sample_bits * pcm->channels;
 
 	awalsa_debug("access:%u\n", pcm->access);
@@ -643,7 +642,7 @@ int _snd_pcm_hw_params_internal(snd_pcm_t *pcm, snd_pcm_hw_params_t *params)
 		pcm->access == SND_PCM_ACCESS_MMAP_INTERLEAVED ||
 		pcm->access == SND_PCM_ACCESS_MMAP_NONINTERLEAVED ||
 		pcm->access == SND_PCM_ACCESS_MMAP_COMPLEX) {
-		ret = snd_pcm_mmap(pcm);
+		ret = sunxi_snd_pcm_mmap(pcm);
 	}
 	if (ret < 0)
 		return ret;
@@ -683,7 +682,7 @@ int snd_vela_pcm_hw_free(snd_pcm_t *pcm)
 	if (!pcm->setup)
 		return 0;
 	if (pcm->mmap_channels) {
-		ret = snd_pcm_munmap(pcm);
+		ret = sunxi_snd_pcm_munmap(pcm);
 		if (ret < 0)
 			return ret;
 	}
@@ -1025,9 +1024,9 @@ int snd_vela_pcm_dump_hw_setup(snd_pcm_t *pcm)
 		awalsa_err("PCM not set up\n");
 		return -EIO;
 	}
-	syslog(LOG_INFO,"  stream          : %s\n", snd_pcm_stream_name(pcm->stream));
-	syslog(LOG_INFO,"  access          : %s\n", snd_pcm_access_name(pcm->access));
-	syslog(LOG_INFO,"  format          : %s\n", snd_pcm_format_name(pcm->format));
+	syslog(LOG_INFO,"  stream          : %s\n", vela_snd_pcm_stream_name(pcm->stream));
+	syslog(LOG_INFO,"  access          : %s\n", vela_snd_pcm_access_name(pcm->access));
+	syslog(LOG_INFO,"  format          : %s\n", vela_snd_pcm_format_name(pcm->format));
 	syslog(LOG_INFO,"  channels        : %u\n", pcm->channels);
 	syslog(LOG_INFO,"  rate            : %u\n", pcm->rate);
 	syslog(LOG_INFO,"  buffer_size     : %lu\n", pcm->buffer_size);
@@ -1071,7 +1070,7 @@ int snd_vela_pcm_dump(snd_pcm_t *pcm)
 ssize_t snd_vela_pcm_format_size(snd_pcm_format_t format, size_t samples)
 {
 	int size = 0;
-	size = snd_pcm_format_physical_width(format);
+	size = sunxi_snd_pcm_format_physical_width(format);
 	if (size < 0)
 		return size;
 	return (size * samples / 8);
@@ -1156,28 +1155,28 @@ static const char *const snd_pcm_type_names[] = {
 	PCMTYPE(EXTPLUG),
 };
 
-const char *snd_pcm_stream_name(snd_pcm_stream_t stream)
+const char *vela_snd_pcm_stream_name(snd_pcm_stream_t stream)
 {
 	if (stream > SND_VELA_PCM_STREAM_LAST)
 		return NULL;
 	return snd_pcm_stream_names[stream];
 }
 
-const char *snd_pcm_access_name(snd_pcm_access_t acc)
+const char *vela_snd_pcm_access_name(snd_pcm_access_t acc)
 {
 	if (acc > SND_PCM_ACCESS_LAST)
 		return NULL;
 	return snd_pcm_access_names[acc];
 }
 
-const char *snd_pcm_format_name(snd_pcm_format_t format)
+const char *vela_snd_pcm_format_name(snd_pcm_format_t format)
 {
 	if (format > SND_PCM_FORMAT_LAST)
 		return NULL;
 	return snd_pcm_format_names[format];
 }
 
-const char *snd_pcm_state_name(snd_pcm_state_t state)
+const char *vela_snd_pcm_state_name(snd_pcm_state_t state)
 {
 	if (state > SND_VELA_PCM_STATE_LAST)
 		return NULL;
@@ -1191,7 +1190,7 @@ const char *snd_pcm_type_name(snd_pcm_type_t type)
 	return snd_pcm_type_names[type];
 }
 
-int snd_pcm_new(snd_pcm_t **pcmp, snd_pcm_type_t type, const char *name, snd_pcm_stream_t stream, int mode)
+int vela_snd_pcm_new(snd_pcm_t **pcmp, snd_pcm_type_t type, const char *name, snd_pcm_stream_t stream, int mode)
 {
 	snd_pcm_t *pcm;
 
@@ -1215,7 +1214,7 @@ int snd_pcm_new(snd_pcm_t **pcmp, snd_pcm_type_t type, const char *name, snd_pcm
 	return 0;
 }
 
-int snd_pcm_free(snd_pcm_t *pcm)
+int vela_snd_pcm_free(snd_pcm_t *pcm)
 {
 	assert(pcm);
 	if (pcm->name)
@@ -1477,7 +1476,7 @@ int snd_pcm_area_silence(const snd_pcm_channel_area_t *dst_area, snd_pcm_uframes
 	if (!dst_area->addr)
 		return 0;
 	dst = snd_pcm_channel_area_addr(dst_area, dst_offset);
-	width = snd_pcm_format_physical_width(format);
+	width = sunxi_snd_pcm_format_physical_width(format);
 	silence = snd_pcm_format_silence_64(format);
 	if (dst_area->step == (unsigned int) width) {
 		unsigned int dwords = samples * width / 64;
@@ -1559,7 +1558,7 @@ int snd_pcm_area_silence(const snd_pcm_channel_area_t *dst_area, snd_pcm_uframes
 int snd_pcm_areas_silence(const snd_pcm_channel_area_t *dst_areas, snd_pcm_uframes_t dst_offset,
 			  unsigned int channels, snd_pcm_uframes_t frames, snd_pcm_format_t format)
 {
-	int width = snd_pcm_format_physical_width(format);
+	int width = sunxi_snd_pcm_format_physical_width(format);
 	while (channels > 0) {
 		void *addr = dst_areas->addr;
 		unsigned int step = dst_areas->step;
@@ -1613,7 +1612,7 @@ int snd_pcm_area_copy(const snd_pcm_channel_area_t *dst_area, snd_pcm_uframes_t 
 	if (!dst_area->addr)
 		return 0;
 	dst = snd_pcm_channel_area_addr(dst_area, dst_offset);
-	width = snd_pcm_format_physical_width(format);
+	width = sunxi_snd_pcm_format_physical_width(format);
 	if (src_area->step == (unsigned int) width &&
 	    dst_area->step == (unsigned int) width) {
 		size_t bytes = samples * width / 8;
@@ -1710,7 +1709,7 @@ int snd_pcm_areas_copy(const snd_pcm_channel_area_t *dst_areas, snd_pcm_uframes_
 		       const snd_pcm_channel_area_t *src_areas, snd_pcm_uframes_t src_offset,
 		       unsigned int channels, snd_pcm_uframes_t frames, snd_pcm_format_t format)
 {
-	int width = snd_pcm_format_physical_width(format);
+	int width = sunxi_snd_pcm_format_physical_width(format);
 	assert(dst_areas);
 	assert(src_areas);
 	if (! channels) {
@@ -1812,7 +1811,7 @@ int __snd_pcm_wait_in_lock(snd_pcm_t *pcm, int timeout)
 #endif
 }
 
-int snd_pcm_wait(snd_pcm_t *pcm, int timeout)
+int snd_vela_pcm_wait(snd_pcm_t *pcm, int timeout)
 {
 	int err;
 	awalsa_debug("\n");
@@ -1823,7 +1822,7 @@ int snd_pcm_wait(snd_pcm_t *pcm, int timeout)
 	return err;
 }
 
-snd_pcm_sframes_t snd_pcm_avail_update(snd_pcm_t *pcm)
+snd_pcm_sframes_t vela_snd_pcm_avail_update(snd_pcm_t *pcm)
 {
 	snd_pcm_sframes_t result;
 	awalsa_debug("\n");
@@ -1863,7 +1862,7 @@ int __snd_pcm_mmap_begin(snd_pcm_t *pcm, const snd_pcm_channel_area_t **areas,
 	return 0;
 }
 
-int snd_pcm_mmap_begin(snd_pcm_t *pcm,
+int sunxi_snd_pcm_mmap_begin(snd_pcm_t *pcm,
 		       const snd_pcm_channel_area_t **areas,
 		       snd_pcm_uframes_t *offset,
 		       snd_pcm_uframes_t *frames)
@@ -1897,7 +1896,7 @@ snd_pcm_sframes_t __snd_pcm_mmap_commit(snd_pcm_t *pcm,
 	return pcm->fast_ops->mmap_commit(pcm->fast_op_arg, offset, frames);
 }
 
-snd_pcm_sframes_t snd_pcm_mmap_commit(snd_pcm_t *pcm,
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_commit(snd_pcm_t *pcm,
 				      snd_pcm_uframes_t offset,
 				      snd_pcm_uframes_t frames)
 {
@@ -1910,7 +1909,7 @@ snd_pcm_sframes_t snd_pcm_mmap_commit(snd_pcm_t *pcm,
 	return result;
 }
 
-snd_pcm_type_t snd_pcm_type(snd_pcm_t *pcm)
+snd_pcm_type_t vela_snd_pcm_type(snd_pcm_t *pcm)
 {
 	assert(pcm);
 	return pcm->type;

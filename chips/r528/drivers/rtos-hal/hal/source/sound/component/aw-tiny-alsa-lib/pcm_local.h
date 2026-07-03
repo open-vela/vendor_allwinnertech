@@ -157,16 +157,16 @@ struct _snd_pcm {
 //	pthread_mutex_t lock;
 };
 
-int snd_pcm_new(snd_pcm_t **pcmp, snd_pcm_type_t type, const char *name, snd_pcm_stream_t stream, int mode);
-int snd_pcm_free(snd_pcm_t *pcm);
+int vela_snd_pcm_new(snd_pcm_t **pcmp, snd_pcm_type_t type, const char *name, snd_pcm_stream_t stream, int mode);
+int vela_snd_pcm_free(snd_pcm_t *pcm);
 
 int snd_pcm_wait_nocheck(snd_pcm_t *pcm, int timeout);
 
 void snd_pcm_areas_from_buf(snd_pcm_t *pcm, snd_pcm_channel_area_t *areas, void *buf);
 void snd_pcm_areas_from_bufs(snd_pcm_t *pcm, snd_pcm_channel_area_t *areas, void **bufs);
 
-int snd_pcm_mmap(snd_pcm_t *pcm);
-int snd_pcm_munmap(snd_pcm_t *pcm);
+int sunxi_snd_pcm_mmap(snd_pcm_t *pcm);
+int sunxi_snd_pcm_munmap(snd_pcm_t *pcm);
 void snd_pcm_set_hw_ptr(snd_pcm_t *pcm, volatile snd_pcm_uframes_t *hw_ptr, int fd, off_t offset);
 void snd_pcm_set_appl_ptr(snd_pcm_t *pcm, volatile snd_pcm_uframes_t *appl_ptr, int fd, off_t offset);
 void snd_pcm_link_hw_ptr(snd_pcm_t *pcm, snd_pcm_t *slave);

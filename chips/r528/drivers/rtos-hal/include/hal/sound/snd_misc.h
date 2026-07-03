@@ -34,7 +34,7 @@
 
 int snd_pcm_limit_hw_rates(struct snd_pcm_runtime *runtime);
 unsigned int snd_pcm_rate_mask_intersect(unsigned int rates_a, unsigned int rates_b);
-int snd_pcm_format_physical_width(snd_pcm_format_t format);
+int sunxi_snd_pcm_format_physical_width(snd_pcm_format_t format);
 int snd_pcm_format_set_silence(snd_pcm_format_t format, void *data, unsigned int samples);
 
 struct snd_pcm_hw_constraint_list {

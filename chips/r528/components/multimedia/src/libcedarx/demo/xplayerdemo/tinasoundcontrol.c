@@ -61,7 +61,7 @@ static int setSoundDeviceParams(SoundCtrlContext* sc)
     int ret = 0;
     logd("setSoundDeviceParams()");
     assert(sc);
-    sc->bytes_per_sample = snd_pcm_format_physical_width(sc->alsa_format) / 8;
+    sc->bytes_per_sample = sunxi_snd_pcm_format_physical_width(sc->alsa_format) / 8;
     sc->bytes_per_sample *= sc->nChannelNum;
     sc->alsa_fragcount = 8;
     sc->chunk_size = 1024;
@@ -189,7 +189,7 @@ sc = (SoundCtrlContext*)s;
         sc->nSampleRate = cfg->nSamplerate;
         sc->nChannelNum = cfg->nChannels;
         sc->alsa_format = SND_PCM_FORMAT_S16_LE;
-        sc->bytes_per_sample = snd_pcm_format_physical_width(sc->alsa_format) / 8;
+        sc->bytes_per_sample = sunxi_snd_pcm_format_physical_width(sc->alsa_format) / 8;
         sc->bytes_per_sample *= sc->nChannelNum;
         logd("TinaSoundDeviceSetFormat()>>>sample_rate:%d,channel_num:%d,sc->bytes_per_sample:%d",
             cfg->nSamplerate,cfg->nChannels,sc->bytes_per_sample);

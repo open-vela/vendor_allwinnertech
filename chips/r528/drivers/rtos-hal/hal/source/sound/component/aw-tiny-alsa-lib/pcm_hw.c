@@ -469,7 +469,7 @@ int _snd_pcm_hw_open(snd_pcm_t **pcmp, const snd_pcm_config_t *pcm_config,
 
 	awalsa_debug("\n");
 
-	ret = snd_pcm_new(&pcm, SND_VELA_PCM_TYPE_HW, pcm_config->name, stream, mode);
+	ret = vela_snd_pcm_new(&pcm, SND_VELA_PCM_TYPE_HW, pcm_config->name, stream, mode);
 	if (ret < 0) {
 		awalsa_err("failed to new hw pcm\n");
 		goto err_out;
@@ -505,7 +505,7 @@ int _snd_pcm_hw_open(snd_pcm_t **pcmp, const snd_pcm_config_t *pcm_config,
 free_hw:
 	snd_free(hw);
 free_pcm:
-	snd_pcm_free(pcm);
+	vela_snd_pcm_free(pcm);
 err_out:
 	return ret;
 }

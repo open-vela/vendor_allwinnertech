@@ -20,6 +20,8 @@
 
 include $(APPDIR)/Make.defs
 ifeq ($(CONFIG_BT_INSTANCE),y)
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/connectivity/bluetooth/framework/include
+
 ifeq ($(CONFIG_BT_START),y)
 PROGNAME  += bt_start
 PRIORITY  += $(CONFIG_BT_START_PRIORITY)

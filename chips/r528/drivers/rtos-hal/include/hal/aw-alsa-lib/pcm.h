@@ -353,21 +353,21 @@ ssize_t snd_vela_pcm_frames_to_bytes(snd_pcm_t *pcm, snd_pcm_sframes_t frames);
 snd_pcm_type_t snd_pcm_type(snd_pcm_t *pcm);
 
 const char *snd_pcm_type_name(snd_pcm_type_t type);
-const char *snd_pcm_stream_name(snd_pcm_stream_t stream);
-const char *snd_pcm_access_name(const snd_pcm_access_t _access);
-const char *snd_pcm_format_name(const snd_pcm_format_t format);
-const char *snd_pcm_state_name(const snd_pcm_state_t state);
+const char *vela_snd_pcm_stream_name(snd_pcm_stream_t stream);
+const char *vela_snd_pcm_access_name(const snd_pcm_access_t _access);
+const char *vela_snd_pcm_format_name(const snd_pcm_format_t format);
+const char *vela_snd_pcm_state_name(const snd_pcm_state_t state);
 
 /* Direct Access (MMAP) functions */
-int snd_vela_pcm_mmap_begin(snd_pcm_t *pcm,
+int sunxi_snd_pcm_mmap_begin(snd_pcm_t *pcm,
 		       const snd_pcm_channel_area_t **areas,
 		       snd_pcm_uframes_t *offset,
 		       snd_pcm_uframes_t *frames);
-snd_pcm_sframes_t snd_vela_pcm_mmap_commit(snd_pcm_t *pcm,
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_commit(snd_pcm_t *pcm,
 				      snd_pcm_uframes_t offset,
 				      snd_pcm_uframes_t frames);
-snd_pcm_sframes_t snd_vela_pcm_mmap_writei(snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size);
-snd_pcm_sframes_t snd_vela_pcm_mmap_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t size);
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_writei(snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size);
+snd_pcm_sframes_t sunxi_snd_pcm_mmap_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t size);
 
 int snd_vela_pcm_area_silence(const snd_pcm_channel_area_t *dst_channel, snd_pcm_uframes_t dst_offset,
 			 unsigned int samples, snd_pcm_format_t format);

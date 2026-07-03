@@ -363,7 +363,7 @@ static int __Start(SoundCtrl* s)
                 return 0;
             }
 
-            sc->bytes_per_sample = snd_pcm_format_physical_width(sc->alsa_format) / 8;
+            sc->bytes_per_sample = sunxi_snd_pcm_format_physical_width(sc->alsa_format) / 8;
             sc->bytes_per_sample *= pcm_params.channels;
             pcm_params.bps = pcm_params.samplerate * sc->bytes_per_sample;
 
