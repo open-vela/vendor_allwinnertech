@@ -72,7 +72,7 @@ size = 256
 
 [partition]
      name         = bootloader
-     size         = 16384
+     size         = 32768
      user_type    = 0x8000
 	 downloadfile = "nsh.fex"
 
@@ -96,6 +96,6 @@ size = 256
 
 [partition]
     name         = usrdata
-    size         = 441856
+    size         = 425472
     downloadfile = "usrdata.fex"
     user_type    = 0x8000
