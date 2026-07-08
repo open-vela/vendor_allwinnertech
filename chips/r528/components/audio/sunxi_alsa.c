@@ -228,19 +228,30 @@ static int sunxi_get_latency(struct audio_lowerhalf_s *dev,
 static void
 sunxi_audio_setvolume(FAR struct sunxi_dev_s *priv, uint16_t volume)
 {
-	//char *card_name = "audiocodec";
-	int numid = 6;      /* DACL digital volume control ID */
-	int ret = snd_ctl_set_bynum(CONFIG_AW_AUDIO_CODEC_DEFAULT_CARDNAME, numid, volume);
+	int numid;
+	int ret;
+	uint32_t reg_vol;
+
+	/* Map incoming percent (0..100) to DAC_VOL_L/R register range (0..0xFF,
+	 * where 0xFF is 0dB). The upper layer passes a percentage, but the codec
+	 * digital volume register is 8-bit, so a direct write left it almost muted.
+	 */
+
+	if (volume > 100)
+		volume = 100;
+	reg_vol = (uint32_t)volume * 0xFF / 100;
+
+	numid = 6;      /* DACL digital volume control ID */
+	ret = snd_ctl_set_bynum(CONFIG_AW_AUDIO_CODEC_DEFAULT_CARDNAME, numid, reg_vol);
 	if (ret < 0)
 		syslog(LOG_INFO, "set volume wrong\n");
 
 	numid = 7;      /* DACR digital volume control ID */
-	ret = snd_ctl_set_bynum(CONFIG_AW_AUDIO_CODEC_DEFAULT_CARDNAME, numid, volume);
+	ret = snd_ctl_set_bynum(CONFIG_AW_AUDIO_CODEC_DEFAULT_CARDNAME, numid, reg_vol);
 	if (ret < 0)
 		syslog(LOG_INFO, "set volume wrong\n");
 
-	syslog(LOG_INFO,"volume=%u\n", volume);
-#warning Missing logic
+	syslog(LOG_INFO, "volume=%u reg_vol=%u\n", volume, reg_vol);
 }
 
 #endif /* CONFIG_AUDIO_EXCLUDE_VOLUME */
