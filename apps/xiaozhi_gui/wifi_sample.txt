@@ -1,0 +1,11 @@
+bssid / frequency / signal level / encode / ssid
+74:39:89:f8:f0:ae       5240    -59     0803    Programmers7
+76:39:89:fe:f0:ae       5240    -62     0803
+48:8a:d2:d1:62:a2       2412    -73     8000    MERCURY_62A2
+f0:92:b4:a6:03:91       2422    -75     0803    ChinaNet-kRAH
+74:39:89:f8:f0:ad       2462    -85     0803    Programmers
+76:39:89:fe:f0:ad       2462    -85     0803
+d2:ad:08:f8:eb:71       2462    -88     0803    DIRECT-71-HP Smart Tank 750
+7c:c8:4a:e9:39:f8       5180    -92     0803    yankemei168_5G
+7c:c8:4a:e9:39:fb       5180    -92     0805
+c8:50:e9:bb:f5:0a       2422    -93     0803    ChinaNet-sqJr

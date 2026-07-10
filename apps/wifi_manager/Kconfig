@@ -1,0 +1,29 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_WIFI_MANAGER
+	tristate "\"wifi manager\" example"
+	default n
+	---help---
+		Enable the \"wifi manager\" example
+
+if EXAMPLES_WIFI_MANAGER
+
+config EXAMPLES_WIFI_MANAGER_PROGNAME
+	string "Program name"
+	default "wifi_manager"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config EXAMPLES_WIFI_MANAGER_PRIORITY
+	int "wifi_manager task priority"
+	default 100
+
+config EXAMPLES_WIFI_MANAGER_STACKSIZE
+	int "wifi_manager stack size"
+	default 20480
+
+endif

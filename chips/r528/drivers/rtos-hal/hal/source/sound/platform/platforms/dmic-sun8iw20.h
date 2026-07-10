@@ -46,11 +46,19 @@
 
 /*------------------------ PIN CONFIG FOR D1 EVB -----------------------*/
 dmic_gpio_t g_dmic_gpio = {
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+	.clk	= {GPIOD(20), 4},
+	.din0	= {GPIOD(19), 4},
+	.din1	= {GPIOB(18), 4},
+	.din2	= {GPIOD(17), -1},
+	.din3	= {GPIOG(26), -1},	/* no use */
+#else	
 	.clk	= {GPIOB(12), 2},
 	.din0	= {GPIOB(11), 2},
 	.din1	= {GPIOB(10), 2},
 	.din2	= {GPIOD(17), 4},
 	.din3	= {GPIOG(26), -1},	/* no use */
+#endif	
 };
 
 /*------------------------ CLK CONFIG FOR SUN8IW20 ---------------------------*/

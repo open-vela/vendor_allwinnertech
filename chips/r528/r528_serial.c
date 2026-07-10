@@ -550,9 +550,9 @@ static inline void r528_uart3config(void)
 
   flags = enter_critical_section();
   sunxi_clock_init_uart(3);
-#define UART3_TX		GPIOD(10)
-#define UART3_RX		GPIOD(11)
-#define UART3_GPIO_FUNCTION	(5)
+#define UART3_TX		GPIOB(6)
+#define UART3_RX		GPIOB(7)
+#define UART3_GPIO_FUNCTION	(7)
   hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART3_TX, UART3_GPIO_FUNCTION);
   hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART3_RX, UART3_GPIO_FUNCTION);
   leave_critical_section(flags);
@@ -1135,6 +1135,7 @@ static void up_rxint(struct uart_dev_s *dev, bool enable)
     }
 
   arm_serialout(priv, R528_UART_IER_OFFSET, priv->ier);
+
   leave_critical_section(flags);
 }
 

@@ -90,6 +90,10 @@
 #include <nuttx/i2c/i2c_master.h>
 #endif
 
+#if defined(CONFIG_SPI_DRIVER)
+#include <nuttx/spi/spi.h>
+#endif
+
 #ifdef CONFIG_WATCHDOG
 #ifdef CONFIG_R528_WATCHDOG
 #include <arch/chip/r528_wdt.h>
@@ -112,6 +116,8 @@
 #include <hal_clk.h>
 #endif
 
+#include <hal_gpio.h>
+
 #ifdef CONFIG_DRIVERS_CE
 #include <sunxi_hal_ce.h>
 #endif
@@ -133,6 +139,8 @@ FAR struct i2c_master_s *r528_i2c_initialize(FAR const char *devpath, int i2c_id
 int r528_gpadc_initialize(FAR const char *devpath, int channel_id);
 int r528_button_initialize(FAR const char *devname);
 int r528_touchscreen_initialize(FAR const char *devname);
+int r528_ft5x06_register(FAR struct i2c_master_s *i2c_bus);
+int spi_lcd_fb_register(int display, FAR struct spi_dev_s *spi_dev);
 #ifdef CONFIG_IEEE80211_REALTEK_WIFI
 int realtek_wlan_bringup(void);
 #endif
@@ -573,6 +581,7 @@ int r528_disp_init(void)
 {
 #ifdef CONFIG_DISP2_SUNXI
 #ifdef CONFIG_VIDEO_FB
+#ifndef CONFIG_SPI_LCD_FB
 	int ret = fb_register(0, 0);
 	if (ret < 0)
 	{
@@ -580,6 +589,9 @@ int r528_disp_init(void)
 		return ret;
 	}
   syslog(LOG_ERR, "succese to initialize Frame Buffer Driver.\n");
+#else
+	syslog(LOG_INFO, "Skip DISP2 fb_register because CONFIG_SPI_LCD_FB is enabled.\n");
+#endif
 #else
 	extern int disp_probe(void);
 	disp_probe();
@@ -820,6 +832,13 @@ void r528_late_initialize(void)
     bmi160_register(0, i2c_bus2);
 #endif
 
+#ifdef CONFIG_INPUT_FT5X06
+  if (i2c_bus2)
+    {
+      r528_ft5x06_register(i2c_bus2);
+    }
+#endif
+
 #endif
 
 #ifdef CONFIG_DRIVERS_GPADC
@@ -923,6 +942,19 @@ void r528_late_initialize(void)
 extern struct spi_dev_s *sunxi_spibus_initialize(int port);
     sunxi_spibus_initialize(1);
 #endif
+
+#ifdef CONFIG_SPI_LCD_FB
+  {
+    FAR struct spi_dev_s *spidev;
+
+    extern struct spi_dev_s *sunxi_spibus_initialize(int port);
+    spidev = sunxi_spibus_initialize(1);
+    if (spidev)
+      {
+        spi_lcd_fb_register(0, spidev);
+      }
+  }
+#endif
 #endif
 
 
@@ -973,7 +1005,9 @@ extern struct spi_dev_s *sunxi_spibus_initialize(int port);
 #endif
 
 #ifndef CONFIG_ARCH_TRUSTZONE_SECURE
-#ifdef CONFIG_LCD
+#if defined(CONFIG_LCD_FRAMEBUFFER)
+  r528_disp_init();
+#elif defined(CONFIG_LCD)
   // Initialize the LCD board
   extern int board_lcd_initialize(void);
   int lcd_ret = board_lcd_initialize();
@@ -983,7 +1017,7 @@ extern struct spi_dev_s *sunxi_spibus_initialize(int port);
   }
 #ifdef CONFIG_LCD_DEV
      // Register the LCD device
-     lcd_ret = lcddev_register(0);
+     lcd_ret = lcddev_register(0); 
      if (lcd_ret < 0)
      {
          syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", lcd_ret);
@@ -996,6 +1030,14 @@ extern struct spi_dev_s *sunxi_spibus_initialize(int port);
 
 #ifdef CONFIG_MICRO_TF
     micro_sd_initialize();
+#endif
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+  /* Re-apply UART3 console pinmux after late bring-up. Some late init path
+   * overwrites PB7, which breaks UART3_RX while TX still works.
+   */
+  hal_gpio_pinmux_set_function(GPIOB(6), GPIO_MUXSEL_FUNCTION7);
+  hal_gpio_pinmux_set_function(GPIOB(7), GPIO_MUXSEL_FUNCTION7);
 #endif
 
 	syslog(LOG_INFO, "r528_late_initialize finish \n");

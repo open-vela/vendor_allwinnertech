@@ -43,13 +43,145 @@
 #include <hal_timer.h>
 #include "common.h"
 #include "wav_parser.h"
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+#include <opus.h>
+#include <ipc_udp.h>
+#include <cfg.h>
+#endif
 
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+static p_ipc_endpoint_t g_ipc_ep_audio_download;
+#endif
 static unsigned int g_playback_time = 0;
 static unsigned int g_playback_loop_enable = 0;
 static unsigned int g_playback_mode = 0;
 static char *g_pcm_name;
 static char *g_hpcm_name;
 extern unsigned int g_verbose;
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+static int decode_then_play(audio_mgr_t *mgr)
+{
+#define MAX_PACKET_SIZE 4000
+	int ret = 0;
+	unsigned int chunk_bytes;
+	unsigned int frame_bytes = 0;
+	ssize_t r = 0;
+	char *audiobuf = NULL;
+	unsigned char *opusbuf = NULL;
+	int opuslen;
+	OpusDecoder *dec = NULL;
+
+	ret = snd_vela_pcm_open(&mgr->handle, g_pcm_name,
+				SND_VELA_PCM_STREAM_PLAYBACK, 0);
+	if (ret < 0)
+		{
+			syslog(LOG_ERR, "audio open error:%d\n", ret);
+			goto err_pcm_open_pcm;
+		}
+
+	mgr->period_size = 60 * mgr->rate / 1000;
+	mgr->buffer_size = 4 * mgr->period_size;
+
+	syslog(LOG_INFO, "dump args:\n");
+	syslog(LOG_INFO, "card:\t     %s\n", g_pcm_name);
+	syslog(LOG_INFO, "format:      %u\n", mgr->format);
+	syslog(LOG_INFO, "rate:\t     %u\n", mgr->rate);
+	syslog(LOG_INFO, "channels:    %u\n", mgr->channels);
+	syslog(LOG_INFO, "period_size: %lu\n", mgr->period_size);
+	syslog(LOG_INFO, "buffer_size: %lu\n", mgr->buffer_size);
+
+	ret = set_param(mgr->handle, mgr->format, mgr->rate, mgr->channels,
+			mgr->period_size, mgr->buffer_size);
+	if (ret < 0)
+		{
+			syslog(LOG_ERR, "audio set pcm param error:%d\n", ret);
+			goto err_set_param_pcm;
+		}
+
+	frame_bytes = snd_vela_pcm_frames_to_bytes(mgr->handle, 1);
+	chunk_bytes = snd_vela_pcm_frames_to_bytes(mgr->handle,
+						   mgr->period_size);
+
+	audiobuf = malloc(chunk_bytes);
+	if (!audiobuf)
+		{
+			syslog(LOG_ERR, "no memory...\n");
+			goto err_malloc_audiobuf;
+		}
+
+	opusbuf = malloc(MAX_PACKET_SIZE);
+	if (!opusbuf)
+		{
+			syslog(LOG_ERR, "no memory for opusbuf...\n");
+			goto err_malloc_audiobuf;
+		}
+
+	dec = opus_decoder_create(mgr->rate, mgr->channels, &ret);
+	if (ret != OPUS_OK)
+		{
+			fprintf(stderr, "Cannot create decoder: %s\n",
+				opus_strerror(ret));
+			goto err_malloc_audiobuf;
+		}
+
+	while (1)
+		{
+			while (0 != g_ipc_ep_audio_download->recv(g_ipc_ep_audio_download,
+							  opusbuf,
+							  MAX_PACKET_SIZE,
+							  &opuslen));
+
+			ret = opus_decode(dec, opusbuf, opuslen, (opus_int16 *)audiobuf,
+					  mgr->period_size, 0);
+			if (ret < 0)
+				{
+					syslog(LOG_ERR, "opus_decode error:%d\n", ret);
+					break;
+				}
+
+			r = pcm_write(mgr->handle, audiobuf, ret, frame_bytes);
+			if (r != ret)
+				{
+					syslog(LOG_ERR,
+					       "pcm_write error, written = %d, output_samples=%d\n",
+					       (int)r, ret);
+					break;
+				}
+		}
+
+	snd_vela_pcm_drain(mgr->handle);
+
+	free(audiobuf);
+	free(opusbuf);
+	if (mgr->handle != NULL)
+		{
+			snd_vela_pcm_close(mgr->handle);
+		}
+
+	return 0;
+
+err_malloc_audiobuf:
+	if (audiobuf)
+		{
+			free(audiobuf);
+		}
+
+	if (opusbuf)
+		{
+			free(opusbuf);
+		}
+
+err_set_param_pcm:
+	if (mgr->handle != NULL)
+		{
+			snd_vela_pcm_close(mgr->handle);
+		}
+
+err_pcm_open_pcm:
+	return ret;
+}
+#endif
 
 /*
  * arg0: aplay
@@ -374,6 +506,7 @@ static void usage(void)
 	syslog(LOG_INFO,"    -s,        play sine wave mode\n");
 	syslog(LOG_INFO,"    -t,        play sine wave time\n");
 	syslog(LOG_INFO,"    -v,        show pcm setup\n");
+	syslog(LOG_INFO,"    -o,        decode by opus\n");
 	syslog(LOG_INFO,"    -h,        show usage\n");
 	syslog(LOG_INFO,"\n");
 }
@@ -384,6 +517,9 @@ int main(int argc, char **argv)
 #endif
 {
 	int play_sine = 0;
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+	int use_opus = 0;
+#endif	
 	audio_mgr_t *audio_mgr = NULL;
 	char *file_path = NULL;
 	g_hpcm_name = NULL;
@@ -458,6 +594,10 @@ int main(int argc, char **argv)
 				g_playback_mode = atoi(*argv);
 		} else if (strcmp(*argv, "-l") == 0) {
 			g_playback_loop_enable = 1;
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI			
+		} else if (strcmp(*argv, "-o") == 0) {
+			use_opus = 1;
+#endif			
 		} else if (strcmp(*argv, "-v") == 0) {
 			g_verbose = 1;
 		} else if (strcmp(*argv, "-h") == 0) {
@@ -471,10 +611,26 @@ int main(int argc, char **argv)
 			argv++;
 	}
 
-	if (play_sine) {
-		play_fs_sine(audio_mgr);
-	} else {
-		play_fs_music(audio_mgr, file_path);
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI	
+	if (use_opus) {
+		g_ipc_ep_audio_download =
+			ipc_endpoint_create_udp(AUDIO_PORT_DOWN, 0, NULL, NULL);
+		if (!g_ipc_ep_audio_download) {
+			fprintf(stderr, "Failed to create IPC endpoint\n");
+			audio_mgr_release(audio_mgr);
+			return -1;
+		}
+
+		decode_then_play(audio_mgr);
+	} else 
+#endif	
+	{
+
+		if (play_sine) {
+			play_fs_sine(audio_mgr);
+		} else {
+			play_fs_music(audio_mgr, file_path);
+		}
 	}
 
 err:

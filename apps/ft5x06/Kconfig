@@ -1,0 +1,30 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_FT5X06
+	tristate "\"FT5X06 APP\" example"
+	default n
+	depends on INPUT_FT5X06
+	---help---
+		Enable the \"FT5X06, APP!\" example
+
+if EXAMPLES_FT5X06
+
+config EXAMPLES_FT5X06_PROGNAME
+	string "Program name"
+	default "ft5x06"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config EXAMPLES_FT5X06_PRIORITY
+	int "Hello task priority"
+	default 100
+
+config EXAMPLES_FT5X06_STACKSIZE
+	int "Hello stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
