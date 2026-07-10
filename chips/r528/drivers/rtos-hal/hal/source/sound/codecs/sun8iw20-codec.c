@@ -76,7 +76,7 @@ static struct sunxi_codec_param default_param = {
 	.mic2gain		= 0x1f,
 	.mic3gain		= 0x1f,
 	.lineingain		= 0x0,
-#if defined(CONFIG_ARCH_BOARD_R528S3_EVB4) || defined(CONFIG_ARCH_BOARD_R528S3_GEMINI_S1)
+#if defined(CONFIG_ARCH_BOARD_R528S3_EVB4) || defined(CONFIG_ARCH_BOARD_R528S3_GEMINI_S1) || defined(CONFIG_ARCH_BOARD_R528S3_DSHANPI)
 	.gpio_spk		= GPIOD(17),
 #elif CONFIG_ARCH_BOARD_R528S3_X4B
 	.gpio_spk		= GPIOB(2),

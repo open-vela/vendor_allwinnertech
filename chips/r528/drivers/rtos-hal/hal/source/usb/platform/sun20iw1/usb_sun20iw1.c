@@ -72,11 +72,18 @@ static const struct platform_usb_port_config usb_port_table = {
 	.detect_mode = 0,
 	.id.valid = 1,
 	.id.gpio = GPIO_PD12,
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+	/* This board does not use det_vbus/drv_vbus[0]. Keep PB7 for UART3_RX. */
+	.det_vbus.valid = 0,
+	.drv_vbus[0].valid = 0,
+	.drv_vbus[1].valid = 0,
+#else
 	.det_vbus.valid = 1,
-	.det_vbus.gpio = GPIO_PB8,
 	.drv_vbus[0].valid = 1,
-	.drv_vbus[0].gpio = GPIO_PB7,
 	.drv_vbus[1].valid = 1,
+#endif
+	.det_vbus.gpio = GPIO_PB8,
+	.drv_vbus[0].gpio = GPIO_PB7,
 	.drv_vbus[1].gpio = GPIO_PD22,
 };
 #endif

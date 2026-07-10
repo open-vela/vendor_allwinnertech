@@ -1,0 +1,54 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config EXAMPLES_LED_KEY
+	tristate "key_led GPIO example"
+	default n
+	depends on DEV_GPIO
+	---help---
+		Enable the key_led GPIO example using /dev/gpioN devices.
+
+if EXAMPLES_LED_KEY
+
+config EXAMPLES_LED_KEY_PROGNAME
+	string "Program name"
+	default "key_led"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config EXAMPLES_LED_KEY_PRIORITY
+	int "LED KEY task priority"
+	default 100
+
+config EXAMPLES_LED_KEY_STACKSIZE
+	int "LED KEY stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+config EXAMPLES_LED_KEY_OUT_DEVPATH
+	string "LED KEY output GPIO device path"
+	default "/dev/gpio0"
+	---help---
+		Default output GPIO device used by the LED KEY example.
+
+config EXAMPLES_LED_KEY1_DEVPATH
+	string "Key1 GPIO device path"
+	default "/dev/gpio1"
+	---help---
+		Default input GPIO device for the first key.
+
+config EXAMPLES_LED_KEY2_DEVPATH
+	string "Key2 GPIO device path"
+	default "/dev/gpio2"
+	---help---
+		Default input GPIO device for the second key.
+
+config EXAMPLES_LED_KEY3_DEVPATH
+	string "Key3 GPIO device path"
+	default "/dev/gpio3"
+	---help---
+		Default input GPIO device for the third key.
+
+endif

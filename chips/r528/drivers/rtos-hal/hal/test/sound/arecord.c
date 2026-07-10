@@ -44,6 +44,15 @@
 #include "wav_parser.h"
 #include <hal_time.h>
 #include <hal_timer.h>
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+#include <opus.h>
+#include <ipc_udp.h>
+#include <cfg.h>
+#endif
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+static p_ipc_endpoint_t g_ipc_ep_audio_upload;
+#endif
 
 unsigned int g_capture_loop_enable = 0;
 static unsigned int g_capture_then_play = 0;
@@ -51,6 +60,158 @@ static char g_pcm_name[32];
 extern unsigned int g_verbose;
 extern int aplay(const char *card_name, snd_pcm_format_t format, unsigned int rate,
 		 unsigned int channels, const char *data, unsigned int datalen);
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+static int arecord_then_encode(const char *card_name, snd_pcm_format_t format,
+			       unsigned int rate, unsigned int channels,
+			       unsigned int duration_ms)
+{
+#define MAX_PACKET_SIZE 4000
+	int ret = 0;
+	snd_pcm_t *handle = NULL;
+	snd_pcm_uframes_t period_frames = 1024;
+	snd_pcm_uframes_t buffer_frames = 4096;
+	OpusEncoder *encoder = NULL;
+	unsigned int len = 0;
+	unsigned char *opus_buffer = NULL;
+	int frames = 60 * rate / 1000;
+	opus_int32 skip = 0;
+	unsigned int count = 0;
+	char *capture_data = NULL;
+
+	(void)duration_ms;
+
+	period_frames = frames;
+	buffer_frames = 4 * period_frames;
+	len = snd_vela_pcm_format_size(format, frames * channels);
+
+	capture_data = malloc(len);
+	opus_buffer = malloc(MAX_PACKET_SIZE);
+	if (!capture_data || !opus_buffer)
+		{
+			fprintf(stderr, "Error allocating buffers\n");
+			if (capture_data)
+				{
+					free(capture_data);
+				}
+
+			if (opus_buffer)
+				{
+					free(opus_buffer);
+				}
+
+			return -1;
+		}
+
+	memset(capture_data, 0, len);
+
+	encoder = opus_encoder_create(rate, channels, OPUS_APPLICATION_AUDIO, &ret);
+	if (ret < 0)
+		{
+			fprintf(stderr, "Failed to create Opus encoder: %s\n",
+				opus_strerror(ret));
+			goto err1;
+		}
+
+	opus_encoder_ctl(encoder, OPUS_SET_BITRATE(64000));
+	opus_encoder_ctl(encoder, OPUS_SET_COMPLEXITY(10));
+	opus_encoder_ctl(encoder, OPUS_SET_BANDWIDTH(OPUS_AUTO));
+	opus_encoder_ctl(encoder, OPUS_SET_VBR(1));
+	opus_encoder_ctl(encoder, OPUS_SET_VBR_CONSTRAINT(0));
+	opus_encoder_ctl(encoder, OPUS_SET_INBAND_FEC(0));
+	opus_encoder_ctl(encoder, OPUS_SET_FORCE_CHANNELS(OPUS_AUTO));
+	opus_encoder_ctl(encoder, OPUS_SET_DTX(0));
+	opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(0));
+	opus_encoder_ctl(encoder, OPUS_GET_LOOKAHEAD(&skip));
+	opus_encoder_ctl(encoder, OPUS_SET_LSB_DEPTH(16));
+	opus_encoder_ctl(encoder,
+			 OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_60_MS));
+
+	syslog(LOG_INFO, "dump args:\n");
+	syslog(LOG_INFO, "card:      %s\n", card_name);
+	syslog(LOG_INFO, "app:       %u\n", OPUS_APPLICATION_VOIP);
+	syslog(LOG_INFO, "format:    %u\n", format);
+	syslog(LOG_INFO, "rate:      %u\n", rate);
+	syslog(LOG_INFO, "channels:  %u\n", channels);
+	syslog(LOG_INFO, "capture_data:      %p\n", capture_data);
+	syslog(LOG_INFO, "len:   %u\n", len);
+
+	ret = snd_vela_pcm_open(&handle, card_name, SND_VELA_PCM_STREAM_CAPTURE, 0);
+	if (ret < 0)
+		{
+			syslog(LOG_ERR, "audio open error:%d\n", ret);
+			goto err1;
+		}
+
+	ret = set_param(handle, format, rate, channels, period_frames,
+			buffer_frames);
+	if (ret < 0)
+		{
+			goto err1;
+		}
+
+	while (1)
+		{
+			count++;
+			ret = pcm_read(handle, capture_data,
+				       snd_vela_pcm_bytes_to_frames(handle, len),
+				       snd_vela_pcm_frames_to_bytes(handle, 1));
+			if (ret < 0)
+				{
+					syslog(LOG_ERR, "capture error:%d\n", ret);
+					goto err1;
+				}
+
+			ret = opus_encode(encoder, (opus_int16 *)capture_data, frames,
+					  opus_buffer, MAX_PACKET_SIZE);
+			if (ret < 0)
+				{
+					fprintf(stderr, "Opus encoding error: %s\n",
+						opus_strerror(ret));
+					goto err1;
+				}
+
+			if ((count % 100) == 0)
+				{
+					syslog(LOG_INFO,
+					       "opus_encode ok encoded_bytes = %d, send to control_center\n",
+					       ret);
+				}
+
+			g_ipc_ep_audio_upload->send(g_ipc_ep_audio_upload, opus_buffer,
+						    ret);
+		}
+
+	ret = snd_vela_pcm_drain(handle);
+	if (ret < 0)
+		{
+			syslog(LOG_ERR, "stop failed!, return %d\n", ret);
+		}
+
+err1:
+	if (capture_data)
+		{
+			free(capture_data);
+		}
+
+	if (opus_buffer)
+		{
+			free(opus_buffer);
+		}
+
+	if (handle != NULL)
+		{
+			ret = snd_vela_pcm_close(handle);
+			if (ret < 0)
+				{
+					syslog(LOG_ERR, "audio close error:%d\n", ret);
+					return ret;
+				}
+		}
+
+	return ret;
+}
+#endif
 
 /*
  * arg0: arecord
@@ -148,6 +309,29 @@ static int capture_then_play(audio_mgr_t *audio_mgr)
 
 	return 0;
 }
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+static int capture_then_encode(audio_mgr_t *audio_mgr)
+{
+	g_ipc_ep_audio_upload = ipc_endpoint_create_udp(0, AUDIO_PORT_UP, NULL, NULL);
+	if (!g_ipc_ep_audio_upload)
+		{
+			fprintf(stderr, "Failed to create IPC endpoint\n");
+			return -1;
+		}
+
+	do
+		{
+			syslog(LOG_INFO, "arecord start...\n");
+			arecord_then_encode(g_pcm_name, audio_mgr->format,
+					    audio_mgr->rate, audio_mgr->channels,
+					    audio_mgr->capture_duration * 1000);
+		}
+	while (g_capture_loop_enable);
+
+	return 0;
+}
+#endif
 
 int capture_fs_wav(audio_mgr_t *mgr, const char *path)
 {
@@ -273,6 +457,9 @@ static void usage(void)
 	syslog(LOG_INFO,"-d,          capture duration(second)\n");
 	syslog(LOG_INFO,"-k,          kill last record\n");
 	syslog(LOG_INFO,"-t,          record and then play\n");
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI	
+	syslog(LOG_INFO,"-o,          encode by opus\n");
+#endif	
 	syslog(LOG_INFO,"\n");
 }
 
@@ -285,6 +472,9 @@ int main(int argc, char **argv)
 {
 	int c;
 	unsigned int bits = 16;
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI	
+	int use_opus = 0;
+#endif	
 	audio_mgr_t *audio_mgr = NULL;
 	g_verbose = 0;
 	g_capture_then_play = 0;
@@ -299,8 +489,13 @@ int main(int argc, char **argv)
 	strncpy(g_pcm_name, "default", sizeof(g_pcm_name));
 
 	optind = 0;
-	while ((c = getopt(argc, argv, "D:r:f:c:p:b:d:khlvt")) != -1) {
+	while ((c = getopt(argc, argv, "D:r:f:c:p:b:d:okhlvt")) != -1) {
 		switch (c) {
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI			
+		case 'o':
+			use_opus = 1;
+			break;
+#endif			
 		case 'D':
 			strncpy(g_pcm_name, optarg, sizeof(g_pcm_name));
 			g_pcm_name[sizeof(g_pcm_name)-1]='\0';
@@ -356,8 +551,12 @@ int main(int argc, char **argv)
 		syslog(LOG_ERR,"%u bits not supprot\n", bits);
 		return -1;
 	}
-
-	if (optind < argc) {
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+	if (use_opus) {
+		capture_then_encode(audio_mgr);
+	} else 
+#endif
+		if (optind < argc) {
 		capture_fs_wav(audio_mgr, argv[optind]);
 	} else {
 		if (g_capture_then_play)

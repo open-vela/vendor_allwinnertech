@@ -27,6 +27,14 @@ int realtek_wlan_bringup(void)
   usleep(2000);
   realtek_wl_set_gpio(dev,1);
   usleep(2000);*/
+#ifdef CONFIG_ARCH_BOARD_R528S3_DSHANPI
+  int realtek_wl_set_gpio(char * dev ,bool value);
+  ninfo("goio init\n");
+  realtek_wl_set_gpio("/dev/gpio5",0); /* 100ask */
+  usleep(2000);
+  realtek_wl_set_gpio("/dev/gpio5",1);
+  usleep(2000);  
+#endif
 
   set_sdio_param(1,3,NULL);
   g_sdio_dev = sdio_initialize(1);

@@ -1,0 +1,37 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig XIAOZHI_GUI_APP
+	bool "xiaozhi_gui"
+	default n
+	depends on GRAPHICS_LVGL
+	---help---
+		Enable the xiaozhi GUI application.
+
+if XIAOZHI_GUI_APP
+
+config XIAOZHI_GUI_APP_PROGNAME
+	string "Program name"
+	default "xiaozhi_gui"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config XIAOZHI_GUI_APP_PRIORITY
+	int "xiaozhi_gui task priority"
+	default 100
+
+config XIAOZHI_GUI_APP_STACKSIZE
+	int "xiaozhi_gui stack size"
+	default 16384
+
+config XIAOZHI_GUI_APP_INPUT_DEVPATH
+	string "Touchscreen device path"
+	default "/dev/input0"
+	depends on INPUT_TOUCHSCREEN
+	---help---
+		The path to the touchscreen device. Default: "/dev/input0"
+
+endif # XIAOZHI_GUI_APP

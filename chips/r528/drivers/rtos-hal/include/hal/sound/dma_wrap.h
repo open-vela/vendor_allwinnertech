@@ -71,9 +71,10 @@ static inline struct dma_chan *dma_request_channel(void)
 	hal_dma_chan_status_t status = 0;
 
 	chan = calloc(1, sizeof(struct dma_chan));
+	if (!chan)
+		return NULL;
 	status = hal_dma_chan_request(&chan->dma_handle);
 	if (status != HAL_DMA_CHAN_STATUS_FREE) {
-		snd_err("request dma chan failed\n");
 		free(chan);
 		return NULL;
 	}

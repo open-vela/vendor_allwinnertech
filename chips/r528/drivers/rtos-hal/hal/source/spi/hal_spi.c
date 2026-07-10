@@ -65,9 +65,11 @@
 #define SPI_INLINE
 #endif
 
-#ifdef CONFIG_SUNXI_SPI_FAST_XFER
-#define CONFIG_SUNXI_SPI_STATIC_DMA_CHAN
-#endif
+/* Keep SPI fast transfer, but do not permanently reserve DMA channels at
+ * init time. On this board SPI1 is used by `spi_lcd_fb`, and holding TX/RX
+ * DMA channels for the framebuffer starves concurrent audio capture/playback.
+ * Let each transfer request/free DMA dynamically instead.
+ */
 
 #ifdef CONFIG_SUNXI_SPI_FAST_XFER
 #define CONFIG_SUNXI_SPI_CPU_XFER_DISABLE_IRQ
@@ -2747,4 +2749,3 @@ end:
     return ret;
 }
 #endif
-

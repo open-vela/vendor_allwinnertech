@@ -55,6 +55,7 @@
 
 #include <arch/board/board.h>
 
+#include <hal_gpio.h>
 #include "sunxi_hal_spi.h"
 
 #define SPI_FREQUENCY_40M 40000000
@@ -473,5 +474,33 @@ int sunxi_spibus_uninitialize(struct spi_dev_s *dev)
 
   return OK;
 }
+
+#ifdef CONFIG_SPI_LCD_FB
+#define SPI_LCD_RST_PIN GPIOD(15)
+#define SPI_LCD_DC_PIN  GPIOD(14)
+#define SPI_LCD_BL_PIN  GPIOD(16)
+
+void spi_lcd_pin_init(void)
+{
+  hal_gpio_pinmux_set_function(SPI_LCD_RST_PIN, GPIO_MUXSEL_OUT);
+  hal_gpio_pinmux_set_function(SPI_LCD_DC_PIN, GPIO_MUXSEL_OUT);
+  hal_gpio_pinmux_set_function(SPI_LCD_BL_PIN, GPIO_MUXSEL_OUT);
+}
+
+void spi_lcd_set_rst_pin(int val)
+{
+  hal_gpio_set_data(SPI_LCD_RST_PIN, val);
+}
+
+void spi_lcd_set_dc_pin(int val)
+{
+  hal_gpio_set_data(SPI_LCD_DC_PIN, val);
+}
+
+void spi_lcd_set_bl_pin(int val)
+{
+  hal_gpio_set_data(SPI_LCD_BL_PIN, val);
+}
+#endif
 
 #endif /* CONFIG_DRIVERS_SPI */

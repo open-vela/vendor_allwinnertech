@@ -2,7 +2,7 @@ include $(APPDIR)/Make.defs
 
 PROGNAME = soundcard
 PRIORITY = 100
-STACKSIZE = 4096
+STACKSIZE = 81920
 
 MODULE = $(CONFIG_COMPONENTS_AW_ALSA_UTILS)
 
@@ -34,6 +34,7 @@ CSRCS = common.c wav_parser.c
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/vendor/allwinnertech/chips/r528/drivers/rtos-hal/include/hal
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/vendor/allwinnertech/chips/r528/drivers/rtos-hal/include/osal
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/vendor/allwinnertech/chips/r528/drivers/rtos-hal/hal/source
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/vendor/allwinnertech/apps/control_center
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/../nuttx/arch/arm/src/armv7-a
 
 clean::

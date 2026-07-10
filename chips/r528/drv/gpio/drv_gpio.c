@@ -95,15 +95,24 @@ struct sunxi_gpio_dev_s
 static struct sunxi_gpio_dev_s g_sunxi_gpio_dev;
 
 static struct sunxi_gpio_map maps[] = {
-#ifndef CONFIG_ARCH_BOARD_R528S3_GEMINI_S1
+#if defined(CONFIG_ARCH_BOARD_R528S3_DSHANPI)
+	{0, GPIOD(21), GPIO_OUTPUT_PIN},        /* LED1 */
+	{1, GPIOD(7), GPIO_INPUT_PIN_PULLDOWN},  /* KEY1 */
+	{2, GPIOD(22), GPIO_OUTPUT_PIN},        /* LED2 F5*/
+	{3, GPIOD(8), GPIO_INPUT_PIN_PULLDOWN},  /* KEY2 */
+	{4, GPIOD(9), GPIO_INPUT_PIN_PULLDOWN},  /* KEY3 */
+  	{5, GPIOG(12), GPIO_OUTPUT_PIN},         /* WL_REG_ON */
+#elif !defined(CONFIG_ARCH_BOARD_R528S3_GEMINI_S1)
   {0, GPIOC(0), GPIO_OUTPUT_PIN},
 	{1, GPIOC(1), GPIO_OUTPUT_PIN},
 #elif defined (CONFIG_ARCH_BOARD_R528S3_GEMINI_XTS)
 	{0, GPIOD(21), GPIO_OUTPUT_PIN},
 	{1, GPIOD(22), GPIO_OUTPUT_PIN},
 #endif
+#if !defined(CONFIG_ARCH_BOARD_R528S3_DSHANPI)
 	{2, GPIOG(18), GPIO_OUTPUT_PIN},
 	{3, GPIOB(10), GPIO_OUTPUT_PIN},
+#endif
 };
 
 static int map_pin(uint8_t pin)

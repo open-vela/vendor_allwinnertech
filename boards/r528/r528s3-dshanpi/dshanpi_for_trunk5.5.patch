@@ -1,0 +1,1285 @@
+diff --git a/external/opus/opus/celt/float_cast.h b/external/opus/opus/celt/float_cast.h
+index 8915a5fd7f6d9a7d369ff8ae8793ec1ea6f7ffdb..d649a5797892a667f09ad325cd5c558bdc755980 100644
+--- a/external/opus/opus/celt/float_cast.h
++++ b/external/opus/opus/celt/float_cast.h
+@@ -99,7 +99,7 @@ static OPUS_INLINE opus_int32 float2int(float x) {return _mm_cvt_ss2si(_mm_set_s
+                 return intgr ;
+         }
+ 
+-#elif defined(HAVE_LRINTF) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
++#elif defined(HAVE_LRINTF) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && !defined(__NuttX__)
+ 
+ /*      These defines enable functionality introduced with the 1999 ISO C
+ **      standard. They must be defined before the inclusion of math.h to
+@@ -117,7 +117,7 @@ static OPUS_INLINE opus_int32 float2int(float x) {return _mm_cvt_ss2si(_mm_set_s
+ #include <math.h>
+ #define float2int(x) lrintf(x)
+ 
+-#elif defined(HAVE_LRINT) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
++#elif defined(HAVE_LRINT) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && !defined(__NuttX__)
+ 
+ #define _ISOC9X_SOURCE 1
+ #define _ISOC99_SOURCE 1
+diff --git a/external/opus/opus/src/analysis.c b/external/opus/opus/src/analysis.c
+index 058328f0fd513105b5e5d40fbfc06f44bdb59f33..ec7c712bf223bf6fc9217405c1ad28b619100ea5 100644
+--- a/external/opus/opus/src/analysis.c
++++ b/external/opus/opus/src/analysis.c
+@@ -54,6 +54,11 @@
+ 
+ #define TRANSITION_PENALTY 10
+ 
++static OPUS_INLINE opus_int32 analysis_float2int(float x)
++{
++   return (opus_int32)(x >= 0 ? x + 0.5f : x - 0.5f);
++}
++
+ static const float dct_table[128] = {
+         0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f,
+         0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f, 0.250000f,
+@@ -587,12 +592,12 @@ static void tonality_analysis(TonalityAnalysisState *tonal, const CELTMode *celt
+        d_angle2 = angle2 - angle;
+        d2_angle2 = d_angle2 - d_angle;
+ 
+-       mod1 = d2_angle - (float)float2int(d2_angle);
++       mod1 = d2_angle - (float)analysis_float2int(d2_angle);
+        noisiness[i] = ABS16(mod1);
+        mod1 *= mod1;
+        mod1 *= mod1;
+ 
+-       mod2 = d2_angle2 - (float)float2int(d2_angle2);
++       mod2 = d2_angle2 - (float)analysis_float2int(d2_angle2);
+        noisiness[i] += ABS16(mod2);
+        mod2 *= mod2;
+        mod2 *= mod2;
+diff --git a/nuttx/drivers/input/ft5x06.c b/nuttx/drivers/input/ft5x06.c
+index be5db1678655e2818ca8c338412ebca1ba8cb013..77658dd7d61495ad365db74cfeb58eccd0090d1f 100644
+--- a/nuttx/drivers/input/ft5x06.c
++++ b/nuttx/drivers/input/ft5x06.c
+@@ -61,10 +61,14 @@
+ #include <nuttx/semaphore.h>
+ #include <nuttx/wqueue.h>
+ #include <nuttx/wdog.h>
++#include <nuttx/mqueue.h>
++#include <nuttx/fs/fs.h>
+ 
+ #include <nuttx/input/touchscreen.h>
+ #include <nuttx/input/ft5x06.h>
+ 
++#include <hal_gpio.h>
++
+ #include "ft5x06.h"
+ 
+ /****************************************************************************
+@@ -126,6 +130,7 @@ struct ft5x06_dev_s
+   struct wdog_s polltimer;                  /* Poll timer */
+ #endif
+   uint8_t touchbuf[FT5X06_TOUCH_DATA_LEN];  /* Raw touch data */
++  struct file   mq;  /* 100ask, msgqueue for samples */
+ 
+   /* The following is a list if poll structures of threads waiting for
+    * driver events. The 'struct pollfd' reference for each open is also
+@@ -215,7 +220,7 @@ static void ft5x06_notify(FAR struct ft5x06_dev_s *priv)
+    * that the read data is available.
+    */
+ 
+-  if (priv->nwaiters > 0)
++  //if (priv->nwaiters > 0)
+     {
+       /* After posting this semaphore, we need to exit because the FT5x06
+        * is no longer available.
+@@ -297,7 +302,15 @@ static void ft5x06_data_worker(FAR void *arg)
+           /* Notify any waiters that new FT5x06 data is available */
+ 
+           priv->valid = true;
+-          ft5x06_notify(priv);
++          struct touch_sample_s touch_sample;
++          int len = ft5x06_sample(priv, (FAR char *)&touch_sample,
++                                  sizeof(touch_sample));
++          if (len == sizeof(touch_sample))
++          {
++            file_mq_send(&priv->mq, (FAR const char *)&touch_sample,
++                         sizeof(touch_sample), 0);
++            ft5x06_notify(priv);
++          }
+         }
+ 
+ #ifdef CONFIG_FT5X06_POLLMODE
+@@ -559,10 +572,19 @@ static ssize_t ft5x06_sample(FAR struct ft5x06_dev_s *priv, FAR char *buffer,
+       ntouches = maxtouches;
+     }
+ 
+-  if (ntouches < 1)
++
++  if (ntouches < 1 )
+     {
+-      priv->valid = false;
+-      return 0;  /* No touches read. */
++      int event         = TOUCH_POINT_GET_EVENT(touch[0]); // 100ASK
++      if (event == 1) /* Put Up */
++      {
++        ntouches = 1;
++      }
++      else
++      {
++        priv->valid = false;
++        return 0;  /* No touches read. */
++      }
+     }
+ 
+   /* User data buffer points (sink) */
+@@ -838,7 +860,8 @@ static ssize_t ft5x06_read(FAR struct file *filep, FAR char *buffer,
+   FAR struct inode *inode;
+   FAR struct ft5x06_dev_s *priv;
+   int ret;
+-
++  unsigned int prio;
++  int msglen = 0;
+   inode = filep->f_inode;
+ 
+   DEBUGASSERT(inode->i_private);
+@@ -859,22 +882,20 @@ static ssize_t ft5x06_read(FAR struct file *filep, FAR char *buffer,
+ 
+   /* Get exclusive access to the driver data structure */
+ 
+-  ret = nxmutex_lock(&priv->devlock);
+-  if (ret < 0)
+-    {
+-      ierr("ERROR: nxmutex_lock failed: %d\n", ret);
+-      return ret;
+-    }
+-
+   /* Try to read sample data. */
+ 
+-  ret = ft5x06_sample(priv, buffer, len);
+-  while (ret == 0)
++  //ret = ft5x06_sample(priv, buffer, len);
++  while (msglen != len)
+     {
++      msglen = file_mq_receive(&priv->mq, (FAR char *)buffer,
++                               len, &prio);
++
+       /* Sample data is not available now.  We would have to wait to receive
+        * sample data.  If the user has specified the O_NONBLOCK option, then
+        * just return an error.
+        */
++      if (msglen == len)
++        break;
+ 
+       if (filep->f_oflags & O_NONBLOCK)
+         {
+@@ -882,21 +903,14 @@ static ssize_t ft5x06_read(FAR struct file *filep, FAR char *buffer,
+           goto errout;
+         }
+ 
+-      /* Wait for sample data */
+ 
+-      ret = ft5x06_waitsample(priv, buffer, len);
+-      if (ret < 0)
+-        {
+-          /* We might have been awakened by a signal */
++      ret = nxsem_wait(&priv->waitsem);
+ 
+-          goto errout;
+-        }
+     }
+ 
+   ret = SIZEOF_TOUCH_SAMPLE_S(1);
+ 
+ errout:
+-  nxmutex_unlock(&priv->devlock);
+   return ret;
+ }
+ 
+@@ -929,6 +943,20 @@ static int ft5x06_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
+ 
+   switch (cmd)
+     {
++      case TSIOC_GETMAXPOINTS:  /* arg: Pointer to uint8_t max touch point */
++        {
++          FAR uint8_t *ptr = (FAR uint8_t *)((uintptr_t)arg);
++          DEBUGASSERT(ptr != NULL);
++
++          /* The current driver queues single-point touch_sample_s reports.
++           * Report one touch point so upper layers read the matching sample
++           * size and can enable touch input successfully.
++           */
++
++          *ptr = 1;
++        }
++        break;
++
+       case TSIOC_SETFREQUENCY:  /* arg: Pointer to uint32_t frequency value */
+         {
+           FAR uint32_t *ptr = (FAR uint32_t *)((uintptr_t)arg);
+@@ -1100,6 +1128,23 @@ int ft5x06_register(FAR struct i2c_master_s *i2c,
+       ierr("ERROR: kmm_zalloc(%d) failed\n", sizeof(struct ft5x06_dev_s));
+       return -ENOMEM;
+     }
++  
++  /* create msgquque for touc samples */
++  struct mq_attr attr;
++  attr.mq_maxmsg  = 16;
++  attr.mq_msgsize = sizeof(struct touch_sample_s);
++  attr.mq_curmsgs = 0;
++  attr.mq_flags   = 0;
++
++  ret = file_mq_open(&priv->mq, "/ft5x06_queue",
++                      O_RDWR | O_NONBLOCK | O_CREAT, 0644, &attr);
++  if (ret < 0)
++    {
++      /* Error creating message queue! */
++
++      ierr("ERROR: Couldn't allocate message queue\n");
++      return ret;
++    }
+ 
+   /* Initialize the FT5x06 device driver instance */
+ 
+@@ -1164,3 +1209,102 @@ errout_with_priv:
+   kmm_free(priv);
+   return ret;
+ }
++
++
++#ifdef CONFIG_INPUT_FT5X06
++
++#define FT5X06_I2C_ADDRESS          (0x70 >> 1)
++#define FT5X06_FREQUENCY 400000
++
++struct ft5x06_isr_data {
++  int irq;
++  xcpt_t isr;
++  void * arg;
++};
++
++static struct ft5x06_isr_data *g_isr_data;
++
++static hal_irqreturn_t ft5x06_gpio_isr (void *data)
++{
++  struct ft5x06_isr_data *isr_data = data;
++  isr_data->isr(isr_data->irq, NULL, isr_data->arg);
++  return HAL_IRQ_OK;
++}
++static int r528_ft5x06_attach(const struct ft5x06_config_s *config,
++                               xcpt_t isr, void *arg)
++{
++  int ret;
++
++  g_isr_data->isr = isr;
++  g_isr_data->arg = arg;
++
++  ret = hal_gpio_irq_request(g_isr_data->irq, ft5x06_gpio_isr, IRQ_TYPE_EDGE_FALLING, g_isr_data);  
++  //iinfo("%s %s %d, ret = %d\n", __FILE__, __FUNCTION__, __LINE__, ret);
++  return ret;
++}
++static void r528_ft5x06_enable(const struct ft5x06_config_s *config,
++                                bool enable)
++{
++  //iinfo("%s %s %d, enable = %d\n", __FILE__, __FUNCTION__, __LINE__, enable);
++  if (enable)
++    {
++      if (g_isr_data)
++        hal_gpio_irq_enable(g_isr_data->irq);
++    }
++  else
++    {
++      if (g_isr_data)
++        hal_gpio_irq_disable(g_isr_data->irq);
++      
++    }
++}
++
++static void r528_ft5x06_clear(const struct ft5x06_config_s *config)
++{
++  
++}
++
++static void r528_ft5x06_wakeup(const struct ft5x06_config_s *config)
++{
++  /* We do not have access to the WAKE pin in the implementation */
++}
++
++static void r528_ft5x06_nreset(const struct ft5x06_config_s *config,
++                                bool nstate)
++{  
++}
++
++
++static const struct ft5x06_config_s g_ft5x06_config =
++{
++  .address   = FT5X06_I2C_ADDRESS,
++  .frequency = FT5X06_FREQUENCY,
++#ifndef CONFIG_FT5X06_POLLMODE
++  .attach    = r528_ft5x06_attach,
++  .enable    = r528_ft5x06_enable,
++  .clear     = r528_ft5x06_clear,
++#endif
++  .wakeup    = r528_ft5x06_wakeup,
++  .nreset    = r528_ft5x06_nreset
++};
++int r528_ft5x06_register(struct i2c_master_s *i2c_bus)
++{
++  struct ft5x06_isr_data *data = malloc(sizeof(struct ft5x06_isr_data));
++  uint32_t irq;
++
++  // reset pin
++  hal_gpio_pinmux_set_function(GPIOE(0), GPIO_MUXSEL_OUT);
++  hal_gpio_set_pull(GPIOE(0), GPIO_PULL_UP);
++  hal_gpio_set_data(GPIOE(0), 1);
++
++  hal_gpio_set_pull(GPIOE(1), GPIO_PULL_UP);
++  hal_gpio_to_irq(GPIOE(1), &irq);
++
++  data->irq = irq;  
++
++  g_isr_data = data;
++
++  // /dev/input0
++  return ft5x06_register(i2c_bus, &g_ft5x06_config, 0);
++}
++#endif
+diff --git a/nuttx/drivers/video/CMakeLists.txt b/nuttx/drivers/video/CMakeLists.txt
+index 7e07c20cd360d6af743feaf3af91bd710c6d7881..595df25068cdbea52a7707aba12a153f167f0400 100644
+--- a/nuttx/drivers/video/CMakeLists.txt
++++ b/nuttx/drivers/video/CMakeLists.txt
+@@ -71,6 +71,10 @@ if(CONFIG_DRIVERS_VIDEO)
+       list(APPEND SRCS max7456.c)
+     endif()
+ 
++    if(CONFIG_SPI_LCD_FB)
++      list(APPEND SRCS spi_lcd_fb.c)
++    endif()
++
+   endif()
+ 
+   target_sources(drivers PRIVATE ${SRCS})
+diff --git a/nuttx/drivers/video/Kconfig b/nuttx/drivers/video/Kconfig
+index d87a2771539ab64e0d330e5ad9e0d154ef2cf300..a22120d1e8de19b16c8b9bc9b9c360230fa922ee 100644
+--- a/nuttx/drivers/video/Kconfig
++++ b/nuttx/drivers/video/Kconfig
+@@ -196,6 +196,13 @@ config VIDEO_MAX7456
+ 		Support for the Maxim 7456 monochrome on-screen display
+ 		multiplexer.
+ 
++config SPI_LCD_FB
++	bool "SPI LCD framebuffer"
++	depends on VIDEO_FB && SPI
++	default n
++	---help---
++		Enable a simple SPI LCD framebuffer driver that exposes /dev/fb0.
++
+ config VIDEO_ISX012
+ 	bool "ISX012 Image sensor"
+ 	default n
+diff --git a/nuttx/drivers/video/Make.defs b/nuttx/drivers/video/Make.defs
+index e2edc640b523f5661777e68267a86c5ea791e719..2269dac9aaae2d1e9dd00fb8a0a8e2a2e24c3a50 100644
+--- a/nuttx/drivers/video/Make.defs
++++ b/nuttx/drivers/video/Make.defs
+@@ -66,6 +66,10 @@ ifeq ($(CONFIG_VIDEO_MAX7456),y)
+   CSRCS += max7456.c
+ endif
+ 
++ifeq ($(CONFIG_SPI_LCD_FB),y)
++  CSRCS += spi_lcd_fb.c
++endif
++
+ endif
+ 
+ ifeq ($(CONFIG_GOLDFISH_CAMERA),y)
+diff --git a/nuttx/fs/yaffs/CMakeLists.txt b/nuttx/fs/yaffs/CMakeLists.txt
+old mode 100644
+new mode 100755
+index 0f49d37cddd41459d417c15e349cd81e66c80ffd..296de710b99b9255a5b7b6157f61b92a68babb07
+--- a/nuttx/fs/yaffs/CMakeLists.txt
++++ b/nuttx/fs/yaffs/CMakeLists.txt
+@@ -19,7 +19,7 @@
+ # ##############################################################################
+ 
+ if(CONFIG_FS_YAFFS)
+-  file(GLOB CSRCS ${CMAKE_CURRENT_LIST_DIR}/*.c)
++
+   file(GLOB YAFFS_CSRCS ${CMAKE_CURRENT_LIST_DIR}/yaffs/*.c)
+   file(GLOB DIRECT_CSRCS ${CMAKE_CURRENT_LIST_DIR}/yaffs/direct/*.c)
+ 
+@@ -36,12 +36,7 @@ if(CONFIG_FS_YAFFS)
+     fs PRIVATE -DCONFIG_YAFFS_DIRECT -DCONFIG_YAFFS_PROVIDE_DEFS
+                -DCONFIG_YAFFS_DEFINES_TYPES -Dloff_t=off_t)
+ 
+-  target_sources(fs PRIVATE ${CSRCS} ${YAFFS_CSRCS} ${DIRECT_CSRCS})
++  target_sources(fs PRIVATE ${YAFFS_CSRCS} ${DIRECT_CSRCS})
+ 
+   target_include_directories(fs PRIVATE ${CMAKE_CURRENT_LIST_DIR}/yaffs)
+-
+-  if(CONFIG_TRACE_YAFFS_FS)
+-    set_source_files_properties(yaffs_vfs.c DIRECTORY ..
+-                                PROPERTIES COMPILE_FLAGS -finstrument-functions)
+-  endif()
+ endif()
+diff --git a/nuttx/fs/yaffs/Kconfig b/nuttx/fs/yaffs/Kconfig
+old mode 100644
+new mode 100755
+index e779d60d372b9a5202f1a47eebe28eca0983c61a..ee2957f69e130ddf8ae228330b59e944f180fe10
+--- a/nuttx/fs/yaffs/Kconfig
++++ b/nuttx/fs/yaffs/Kconfig
+@@ -56,10 +56,4 @@ config FS_YAFFS_EMPTY_LOST_FOUND
+ 	default n
+ 	---help---
+ 		Flag to delete all files in lost and found on mount.
+-
+-config FS_YAFFS_DEBUG
+-	bool "YAFFS file system read/write double check"
+-	depends on DEBUG_FS_ERROR
+-	---help---
+-		Enable YAFFS file system read/write double check.
+ endif
+diff --git a/nuttx/fs/yaffs/yaffs_vfs.c b/nuttx/fs/yaffs/yaffs_vfs.c
+old mode 100644
+new mode 100755
+index ae42430eb03a452c31c3c2d72e1bb65dddb894b0..bca5a788da947359e817673c4ba2083370ea164c
+--- a/nuttx/fs/yaffs/yaffs_vfs.c
++++ b/nuttx/fs/yaffs/yaffs_vfs.c
+@@ -29,14 +29,12 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
+-#include <nuttx/crc16.h>
+ #include <nuttx/fs/fs.h>
+ #include <nuttx/fs/ioctl.h>
+ #include <nuttx/kmalloc.h>
+ #include <nuttx/mtd/mtd.h>
+ #include <nuttx/mutex.h>
+ 
+-#include <sys/mount.h>
+ #include <sys/stat.h>
+ #include <sys/statfs.h>
+ 
+@@ -148,17 +146,7 @@ static int     yaffs_vfs_chstat(FAR struct inode *mountpt,
+                                 FAR const char *relpath,
+                                 FAR const struct stat *buf, int flags);
+ static int     yaffs_vfs_syncfs(FAR struct inode *mountpt);
+-#ifdef CONFIG_FS_LINKS
+-static int     yaffs_vfs_link(FAR struct inode *mountpt,
+-                              FAR const char *relpath1,
+-                              FAR const char *relpath2);
+-static int     yaffs_vfs_symlink(FAR struct inode *mountpt,
+-                                 FAR const char *path1,
+-                                 FAR const char *relpath2);
+-static ssize_t yaffs_vfs_readlink(FAR struct inode *mountpt,
+-                                  FAR const char *relpath,
+-                                  FAR char *buf, size_t bufsize);
+-#endif
++
+ /****************************************************************************
+  * Public Data
+  ****************************************************************************/
+@@ -203,11 +191,6 @@ const struct mountpt_operations g_yaffs_operations =
+   yaffs_vfs_stat,          /* stat */
+   yaffs_vfs_chstat,        /* chstat */
+   yaffs_vfs_syncfs         /* syncfs */
+-#ifdef CONFIG_FS_LINKS
+-  , yaffs_vfs_link,          /* link */
+-  yaffs_vfs_symlink,         /* symlink */
+-  yaffs_vfs_readlink         /* readlink */
+-#endif
+ };
+ 
+ /****************************************************************************
+@@ -933,56 +916,6 @@ static int yaffs_vfs_syncfs(FAR struct inode *mountpt)
+   return ret < 0 ? yaffsfs_GetLastError() : 0;
+ }
+ 
+-#ifdef CONFIG_FS_LINKS
+-/****************************************************************************
+- * Name: yaffs_vfs_link
+- ****************************************************************************/
+-
+-static int yaffs_vfs_link(FAR struct inode *mountpt,
+-                          FAR const char *relpath1,
+-                          FAR const char *relpath2)
+-{
+-  FAR struct yaffs_dev *dev;
+-  int ret;
+-
+-  dev = mountpt_to_yaffs_dev(mountpt);
+-  ret = yaffs_link_reldev(dev, relpath1, relpath2);
+-  return ret < 0 ? yaffsfs_GetLastError() : 0;
+-}
+-
+-/****************************************************************************
+- * Name: yaffs_vfs_symlink
+- ****************************************************************************/
+-
+-static int yaffs_vfs_symlink(FAR struct inode *mountpt,
+-                             FAR const char *path1,
+-                             FAR const char *relpath2)
+-{
+-  FAR struct yaffs_dev *dev;
+-  int ret;
+-
+-  dev = mountpt_to_yaffs_dev(mountpt);
+-  ret = yaffs_symlink_reldev(dev, path1, relpath2);
+-  return ret < 0 ? yaffsfs_GetLastError() : 0;
+-}
+-
+-/****************************************************************************
+- * Name: yaffs_vfs_readlink
+- ****************************************************************************/
+-
+-static ssize_t yaffs_vfs_readlink(FAR struct inode *mountpt,
+-                                  FAR const char *relpath,
+-                                  FAR char *buf, size_t bufsize)
+-{
+-  FAR struct yaffs_dev *dev;
+-  ssize_t ret;
+-
+-  dev = mountpt_to_yaffs_dev(mountpt);
+-  ret = yaffs_readlink_reldev(dev, relpath, buf, bufsize);
+-  return ret < 0 ? yaffsfs_GetLastError() : 0;
+-}
+-#endif
+-
+ /****************************************************************************
+  * Name: yaffs_initialise_fn
+  ****************************************************************************/
+@@ -1001,39 +934,6 @@ static int yaffs_deinitialise_fn(FAR struct yaffs_dev *dev)
+   return YAFFS_OK;
+ }
+ 
+-/****************************************************************************
+- * Name: yaffs_check
+- ****************************************************************************/
+-
+-#ifdef CONFIG_FS_YAFFS_DEBUG
+-static void yaffs_check(FAR struct mtd_dev_s *mtd, int nand_chunk,
+-                        int nchunk, FAR const u8 *buffer, u32 per_chunk_size)
+-{
+-  uint16_t crc16_check;
+-  uint16_t crc16_ori;
+-  int ret;
+-
+-  crc16_ori = crc16(buffer, per_chunk_size * nchunk);
+-  ret = MTD_BREAD(mtd, nand_chunk, nchunk, (FAR u8 *)buffer);
+-  if (ret < 0)
+-    {
+-      ferr("[%s] read block failed!\n", __func__);
+-      lib_dumpbuffer("buffer:", buffer, per_chunk_size * nchunk);
+-      DEBUGASSERT(0);
+-    }
+-  else
+-    {
+-      crc16_check = crc16(buffer, per_chunk_size * nchunk);
+-      if (crc16_ori != crc16_check)
+-        {
+-          ferr("CRC16 check failed!\n");
+-          lib_dumpbuffer("check:", buffer, per_chunk_size * nchunk);
+-          DEBUGASSERT(0);
+-        }
+-    }
+-}
+-#endif
+-
+ /****************************************************************************
+  * Name: yaffs_read_chunk_fn
+  ****************************************************************************/
+@@ -1059,10 +959,6 @@ static int yaffs_read_chunk_fn(FAR struct yaffs_dev *dev, int nand_chunk,
+         {
+           ecc_status = YAFFS_ECC_RESULT_NO_ERROR;
+           ret = YAFFS_OK;
+-#ifdef CONFIG_FS_YAFFS_DEBUG
+-          yaffs_check(mtd, nand_chunk, nchunk, data,
+-                      dev->param.total_bytes_per_chunk);
+-#endif
+         }
+       else
+         {
+@@ -1129,10 +1025,6 @@ static int yaffs_write_chunk_fn(FAR struct yaffs_dev *dev, int nand_chunk,
+       ferr("### write oob? inband tag should not read oob!\n");
+     }
+ 
+-#ifdef CONFIG_FS_YAFFS_DEBUG
+-  yaffs_check(mtd, nand_chunk, nchunk, data,
+-              dev->param.total_bytes_per_chunk);
+-#endif
+   return ret;
+ }
+ 
+@@ -1336,7 +1228,7 @@ static int yaffs_vfs_unbind(FAR void *handle, FAR struct inode **driver,
+ 
+   /* Unmount */
+ 
+-  ret = yaffs_unmount2_reldev(dev, flags & MNT_FORCE);
++  ret = yaffs_unmount_reldev(dev);
+   if (ret >= 0)
+     {
+       /* Remove and release dev */
+diff --git a/nuttx/drivers/video/spi_lcd_fb.c b/nuttx/drivers/video/spi_lcd_fb.c
+new file mode 100644
+index 0000000..0cb3b52
+--- /dev/null
++++ b/nuttx/drivers/video/spi_lcd_fb.c
+@@ -0,0 +1,665 @@
++
++#include <debug.h>
++#include <nuttx/config.h>
++#include <nuttx/video/fb.h>
++#include <nuttx/irq.h>
++#include <nuttx/kmalloc.h>
++#include <nuttx/spi/spi.h>
++#include <nuttx/spi/spi_transfer.h>
++#include <nuttx/kthread.h>
++#include <syslog.h>
++
++/****************************************************************************
++ * Pre-processor definitions
++ ****************************************************************************/
++
++/****************************************************************************
++ * Private Types
++ ****************************************************************************/
++
++struct spi_lcd_fb_s
++{
++  struct fb_vtable_s vtable;
++  struct fb_planeinfo_s planeinfo;
++  struct fb_videoinfo_s videoinfo;
++  struct spi_dev_s *spi;
++  void *unalign_fb;
++};
++
++/****************************************************************************
++ * Private Data
++ ****************************************************************************/
++
++static FAR struct spi_lcd_fb_s *g_spi_lcd_fb;
++
++/****************************************************************************
++ * Private Function Prototypes
++ ****************************************************************************/
++
++static int spi_lcd_getvideoinfo(FAR struct fb_vtable_s *vtable,
++                                 FAR struct fb_videoinfo_s *vinfo);
++static int spi_lcd_getplaneinfo(FAR struct fb_vtable_s *vtable, int planeno,
++                                 FAR struct fb_planeinfo_s *pinfo);
++/****************************************************************************
++ * Private Functions
++ ****************************************************************************/
++static void lcd_lock(void)
++{
++  struct spi_dev_s *spi = g_spi_lcd_fb->spi;
++  SPI_LOCK(spi, true);
++  SPI_SETMODE(spi, SPIDEV_MODE0);
++  SPI_SETBITS(spi, 8);
++  SPI_HWFEATURES(spi, 0);
++  SPI_SETFREQUENCY(spi, 8000000);
++}
++
++static void lcd_unlock(void)
++{
++  struct spi_dev_s *spi = g_spi_lcd_fb->spi;
++  SPI_LOCK(spi, false);
++}
++
++/* GPIO : vendor/allwinnertech/chips/r528/drv/spi/drv_spi.c
++ */
++void spi_lcd_pin_init(void);
++void spi_lcd_set_rst_pin(int val);
++void spi_lcd_set_dc_pin(int val);
++void spi_lcd_set_bl_pin(int val);
++
++int msleep(unsigned int msecs);
++static void SPI_LCD_Pin_Init(void)
++{
++  void spi_lcd_pin_init(void);
++  spi_lcd_pin_init();
++}
++
++/* 复位SPI LCD */
++static void LCD_Reset(void)
++{
++    //HAL_GPIO_WritePin(RESET_GPIO_Port,RESET_Pin,GPIO_PIN_RESET);
++    spi_lcd_set_rst_pin(0);
++    msleep(100);
++    //HAL_GPIO_WritePin(RESET_GPIO_Port,RESET_Pin,GPIO_PIN_SET);
++    spi_lcd_set_rst_pin(1);
++    msleep(100);
++}
++
++/* 控制SPI LCD的背光, enable非零时表示打开背光,否则熄灭背光 */
++static void LCD_BackLightControl(uint32_t enable)
++{
++    void spi_lcd_set_bl_pin(int val);
++    if (enable)
++    {
++        //HAL_GPIO_WritePin(PWM_GPIO_Port,PWM_Pin,GPIO_PIN_SET);
++        spi_lcd_set_bl_pin(1);
++    }
++    else
++    {
++        //HAL_GPIO_WritePin(PWM_GPIO_Port,PWM_Pin,GPIO_PIN_RESET);
++        spi_lcd_set_bl_pin(0);
++    }
++}
++
++/**********************************************************************
++ * 函数名称： LCD_SetDataLine
++ * 功能描述： 设置SPI LCD的D/C引脚为高电平,表示要传输的是数据
++ * 输入参数： 无
++ * 输出参数： 无
++ * 返 回 值： 无
++ * 修改日期：      版本号     修改人       修改内容
++ * -----------------------------------------------
++ * 2024/02/01        V1.0     韦东山       创建
++ ***********************************************************************/
++void LCD_SetDataLine(void)
++{
++    //HAL_GPIO_WritePin(GPIOD,RS_Pin,GPIO_PIN_SET);
++    spi_lcd_set_dc_pin(1);
++}
++
++/* 设置SPI LCD的D/C引脚为低电平,表示要传输的是命令 */
++static void LCD_SetCmdLine(void)
++{
++    //HAL_GPIO_WritePin(GPIOD,RS_Pin,GPIO_PIN_RESET);
++    spi_lcd_set_dc_pin(0);
++}
++
++/* 给SPI LCD发送多个数据,调用此函数前应该先调用LCD_SetDataLine */
++static int SPI_WriteDatas(uint8_t *TxData,uint16_t size)
++{
++    struct spi_dev_s *spi = g_spi_lcd_fb->spi;
++    
++    lcd_lock();
++    SPI_SELECT(spi, 0, true); 
++    SPI_SNDBLOCK(spi, TxData, size);  
++    SPI_SELECT(spi, 0, false); 
++    lcd_unlock();
++
++    return 0;
++}
++
++/* 给SPI LCD发送1个命令 */
++static int LCD_WriteCmd(uint8_t cmd)
++{
++    LCD_SetCmdLine();
++    return SPI_WriteDatas(&cmd, 1);
++}
++
++/* 给SPI LCD发送1个参数,通常是先调用LCD_WriteCmd,再调用LCD_WritePara */
++static int LCD_WritePara(uint8_t data)
++{
++    LCD_SetDataLine();
++    return SPI_WriteDatas(&data, 1);
++}
++
++/**********************************************************************
++ * 函数名称： LCD_WriteDatas
++ * 功能描述： 给SPI LCD发送多个数据
++ * 输入参数： data  - 数据buf
++ *            count - 要发送的数据个数
++ * 输出参数： 无
++ * 返 回 值： 0 - 成功, (-1) - 错误, (-2) - 忙, (-3) - 超时
++ * 修改日期：      版本号     修改人       修改内容
++ * -----------------------------------------------
++ * 2024/02/01        V1.0     韦东山       创建
++ ***********************************************************************/
++int LCD_WriteDatas(uint8_t *datas, uint32_t count)
++{
++    //HAL_GPIO_WritePin(GPIOD,RS_Pin,GPIO_PIN_SET);  /* 由调用者设置RS引脚 */
++    return SPI_WriteDatas(datas, count);
++}
++
++/**********************************************************************
++ * 函数名称： LCD_Init
++ * 功能描述： 初始化LCD
++ * 输入参数： rotation - 旋转角度, 取值如下
++ *    LCD_DISPLAY_ROTATION_0,
++ *    LCD_DISPLAY_ROTATION_90,
++ *    LCD_DISPLAY_ROTATION_180,
++ *    LCD_DISPLAY_ROTATION_270,
++ * 输出参数： 无
++ * 返 回 值： 无
++ * 修改日期：      版本号     修改人       修改内容
++ * -----------------------------------------------
++ * 2024/02/01        V1.0     韦东山       创建
++ ***********************************************************************/
++static void LCD_Init(void)
++{       
++    LCD_Reset();    
++    LCD_BackLightControl(1);
++    
++#if 1   
++    // Positive Gamma Control
++    LCD_WriteCmd( 0xe0);
++    LCD_WritePara(0xf0);
++    LCD_WritePara(0x3e);
++    LCD_WritePara(0x30);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x0a);
++    LCD_WritePara(0x03);
++    LCD_WritePara(0x4d);
++    LCD_WritePara(0x56);
++    LCD_WritePara(0x3a);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x0f);
++    LCD_WritePara(0x04);
++    LCD_WritePara(0x18);
++    LCD_WritePara(0x13);
++    LCD_WritePara(0x00);
++
++    // Negative Gamma Control
++    LCD_WriteCmd(0xe1);
++    LCD_WritePara(0x0f);
++    LCD_WritePara(0x37);
++    LCD_WritePara(0x31);
++    LCD_WritePara(0x0b);
++    LCD_WritePara(0x0d);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x4d);
++    LCD_WritePara(0x34);
++    LCD_WritePara(0x38);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x11);
++    LCD_WritePara(0x01);
++    LCD_WritePara(0x18);
++    LCD_WritePara(0x13);
++    LCD_WritePara(0x00);
++    
++    // Power Control 1
++    LCD_WriteCmd(0xc0);
++    LCD_WritePara(0x18);
++    LCD_WritePara(0x17);
++
++    // Power Control 2
++    LCD_WriteCmd(0xc1);
++    LCD_WritePara(0x41);
++
++    // Power Control 3
++    LCD_WriteCmd(0xc5);
++    LCD_WritePara(0x00);
++
++    // VCOM Control
++    LCD_WriteCmd(0x1a);
++    LCD_WritePara(0x80);
++
++    // Memory Access Control
++    LCD_WriteCmd(0x36);
++    LCD_WritePara(0x48);
++
++    // Pixel Interface Format
++    LCD_WriteCmd(0x3a);
++    LCD_WritePara(0x55);
++
++    // Interface Mode Control
++    LCD_WriteCmd(0xb0);
++    LCD_WritePara(0x00);
++
++    // Frame Rate Control
++    LCD_WriteCmd(0xb1);
++    LCD_WritePara(0xa0);
++
++    // Display Inversion Control
++    LCD_WriteCmd(0xb4);
++    LCD_WritePara(0x02);
++
++    // Display Function Control
++    LCD_WriteCmd(0xb6);
++    LCD_WritePara(0x02);
++    LCD_WritePara(0x02);
++
++    // Set image function
++    LCD_WriteCmd(0xe9);
++    LCD_WritePara(0x00);
++
++    //Adjust Control 3
++    LCD_WriteCmd(0xf7);
++    LCD_WritePara(0xa9);
++    LCD_WritePara(0x51);
++    LCD_WritePara(0x2c);
++    LCD_WritePara(0x82);
++
++    // Write_memory_start
++    LCD_WriteCmd(0x21);
++    msleep(120);
++    //Exit Sleep
++    LCD_WriteCmd(0x11);
++    msleep(120);
++
++    LCD_WriteCmd(0x36);
++    LCD_WritePara(0x48);
++
++    // switch (rotation)
++    // {
++    //     case LCD_DISPLAY_ROTATION_0:
++    //         LCD_WriteCmd(0x36);
++    //         LCD_WritePara(0x48);
++    //         g_lcd_height = 480;
++    //         g_lcd_width  = 320;
++    //         break;
++    //     case LCD_DISPLAY_ROTATION_90:
++    //         LCD_WriteCmd(0x36);
++    //         LCD_WritePara(0xe8);
++    //         g_lcd_height = 320;
++    //         g_lcd_width  = 480;
++    //         break;
++    //     case LCD_DISPLAY_ROTATION_180:
++    //         LCD_WriteCmd(0x36);
++    //         LCD_WritePara(0x88);
++    //         g_lcd_height = 480;
++    //         g_lcd_width  = 320;
++    //         break;
++    //     case LCD_DISPLAY_ROTATION_270:
++    //         LCD_WriteCmd(0x36);
++    //         LCD_WritePara(0x28);
++    //         g_lcd_height = 320;
++    //         g_lcd_width  = 480;
++    //         break;
++    //     default:
++    //         LCD_WriteCmd(0x36);
++    //         LCD_WritePara(0x48);
++    //         g_lcd_height = 480;
++    //         g_lcd_width  = 320;
++    //         break;
++    // }
++
++    // set_screen_size
++    LCD_WriteCmd(0x2a);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x01);
++    LCD_WritePara(0x3f);
++
++    LCD_WriteCmd(0x2b);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x01);
++    LCD_WritePara(0xdf);
++
++    //Display on
++    LCD_WriteCmd(0x29);
++    msleep(120);
++#else
++    LCD_WriteCmd(0x11);
++    msleep(120);
++    LCD_WriteCmd(0x36);     // Memory Data Access Control MY,MX~~
++    LCD_WritePara(0x48);   
++
++    LCD_WriteCmd(0x3A);     
++    //LCDDrvWriteReg(0x55);
++    LCD_WritePara(0x55);   //LCDDrvWriteDat(0x66);
++
++    LCD_WriteCmd(0xF0);     // Command Set Control
++    LCD_WritePara(0xC3);   
++
++    LCD_WriteCmd(0xF0);     
++    LCD_WritePara(0x96);   
++
++    LCD_WriteCmd(0xB4);     
++    LCD_WritePara(0x01);   
++
++    LCD_WriteCmd(0xB7);     
++    LCD_WritePara(0xC6);   
++
++    LCD_WriteCmd(0xC0);     
++    LCD_WritePara(0x80);   
++    LCD_WritePara(0x45);   
++
++    LCD_WriteCmd(0xC1);     
++    LCD_WritePara(0x13);   //18  //00
++
++    LCD_WriteCmd(0xC2);     
++    LCD_WritePara(0xA7);   
++
++    LCD_WriteCmd(0xC5);     
++    LCD_WritePara(0x0A);   
++
++    LCD_WriteCmd(0xE8);     
++    LCD_WritePara(0x40);
++    LCD_WritePara(0x8A);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x00);
++    LCD_WritePara(0x29);
++    LCD_WritePara(0x19);
++    LCD_WritePara(0xA5);
++    LCD_WritePara(0x33);
++
++    LCD_WriteCmd(0xE0);
++    LCD_WritePara(0xD0);
++    LCD_WritePara(0x08);
++    LCD_WritePara(0x0F);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x06);
++    LCD_WritePara(0x33);
++    LCD_WritePara(0x30);
++    LCD_WritePara(0x33);
++    LCD_WritePara(0x47);
++    LCD_WritePara(0x17);
++    LCD_WritePara(0x13);
++    LCD_WritePara(0x13);
++    LCD_WritePara(0x2B);
++    LCD_WritePara(0x31);
++
++    LCD_WriteCmd(0xE1);
++    LCD_WritePara(0xD0);
++    LCD_WritePara(0x0A);
++    LCD_WritePara(0x11);
++    LCD_WritePara(0x0B);
++    LCD_WritePara(0x09);
++    LCD_WritePara(0x07);
++    LCD_WritePara(0x2F);
++    LCD_WritePara(0x33);
++    LCD_WritePara(0x47);
++    LCD_WritePara(0x38);
++    LCD_WritePara(0x15);
++    LCD_WritePara(0x16);
++    LCD_WritePara(0x2C);
++    LCD_WritePara(0x32);
++     
++
++    LCD_WriteCmd(0xF0);     
++    LCD_WritePara(0x3C);   
++
++    LCD_WriteCmd(0xF0);     
++    LCD_WritePara(0x69);   
++
++    msleep(120);
++
++    LCD_WriteCmd(0x21);     
++
++    LCD_WriteCmd(0x29);     
++#endif  
++
++}
++
++/**********************************************************************
++ * 函数名称： LCD_SetWindows
++ * 功能描述： 设置LCD接收数据的窗口,它会划定一个矩形对应的显存,后面写入的数据都对应这个区域
++ * 输入参数： 无
++ * 输出参数： (x1,y1) - 左上角坐标(此坐标包含在这个窗口里面)
++ *            (x2,y2) - 右下角坐标(此坐标包含在这个窗口里面)
++ * 返 回 值： 无
++ * 修改日期：      版本号     修改人       修改内容
++ * -----------------------------------------------
++ * 2024/02/01        V1.0     韦东山       创建
++ ***********************************************************************/
++void LCD_SetWindows(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2)
++{
++    LCD_WriteCmd(0x2a);
++    LCD_WritePara((x1 >> 8) & 0xFF);
++    LCD_WritePara(x1 & 0xFF);
++    LCD_WritePara((x2 >> 8) & 0xFF);
++    LCD_WritePara(x2 & 0xFF);
++    
++
++    LCD_WriteCmd(0x2b);
++    LCD_WritePara((y1 >> 8) & 0xFF);
++    LCD_WritePara(y1 & 0xFF);
++    LCD_WritePara((y2 >> 8) & 0xFF);
++    LCD_WritePara(y2 & 0xFF);
++
++    LCD_WriteCmd(0x2C);
++}
++
++static int spi_lcd_thread_func(int argc, char **argv)
++{
++	unsigned char *fb;
++  int xres = g_spi_lcd_fb->videoinfo.xres;
++  int yres = g_spi_lcd_fb->videoinfo.yres;
++  struct spi_dev_s *spi = g_spi_lcd_fb->spi;
++  
++	while (1) 
++	{
++		fb  = g_spi_lcd_fb->planeinfo.fbmem;
++
++		/* 1. 从Framebuffer得到数据 */
++		/* 2. 转换格式(APP already) */
++    /* 3. 通过SPI发送给OLED */
++
++    LCD_SetWindows(0, 0, xres-1, yres-1);
++		LCD_SetDataLine(); 
++    lcd_lock();
++    SPI_SELECT(spi, 0, true); 
++
++    for (int y = 0; y < g_spi_lcd_fb->videoinfo.yres; y++)
++    {
++  	    SPI_SNDBLOCK(spi, fb, g_spi_lcd_fb->planeinfo.stride);
++        fb += g_spi_lcd_fb->planeinfo.stride;
++    }
++    SPI_SELECT(spi, 0, false); 
++    lcd_unlock();
++
++		/* 4. 休眠一会 */
++		usleep(1);
++	}
++	return 0;
++}
++
++/****************************************************************************
++ * Name: spi_lcd_getvideoinfo
++ ****************************************************************************/
++
++static int spi_lcd_getvideoinfo(FAR struct fb_vtable_s *vtable,
++                                 FAR struct fb_videoinfo_s *vinfo)
++{
++  FAR struct spi_lcd_fb_s *fb = (FAR struct spi_lcd_fb_s *)vtable;
++
++  ginfo("vtable=%p vinfo=%p\n", vtable, vinfo);
++  if (fb && vinfo)
++    {
++      memcpy(vinfo, &fb->videoinfo, sizeof(struct fb_videoinfo_s));
++      return OK;
++    }
++
++  gerr("ERROR: Returning EINVAL\n");
++  return -EINVAL;
++}
++
++/****************************************************************************
++ * Name: spi_lcd_getplaneinfo
++ ****************************************************************************/
++
++static int spi_lcd_getplaneinfo(FAR struct fb_vtable_s *vtable, int planeno,
++                                 FAR struct fb_planeinfo_s *pinfo)
++{
++  FAR struct spi_lcd_fb_s *fb = (FAR struct spi_lcd_fb_s *)vtable;
++
++  ginfo("vtable=%p planeno=%d pinfo=%p\n", vtable, planeno, pinfo);
++  if (fb && planeno == 0 && pinfo)
++    {
++      memcpy(pinfo, &fb->planeinfo, sizeof(struct fb_planeinfo_s));
++      return OK;
++    }
++
++  gerr("ERROR: Returning EINVAL\n");
++  return -EINVAL;
++}
++
++static void sw_rgb565_swap(void * buf, uint32_t buf_size_px)
++{
++    uint32_t u32_cnt = buf_size_px / 2;
++    uint16_t * buf16 = buf;
++    uint32_t * buf32 = buf;
++
++    while(u32_cnt >= 8) {
++        buf32[0] = ((buf32[0] & 0xff00ff00) >> 8) | ((buf32[0] & 0x00ff00ff) << 8);
++        buf32[1] = ((buf32[1] & 0xff00ff00) >> 8) | ((buf32[1] & 0x00ff00ff) << 8);
++        buf32[2] = ((buf32[2] & 0xff00ff00) >> 8) | ((buf32[2] & 0x00ff00ff) << 8);
++        buf32[3] = ((buf32[3] & 0xff00ff00) >> 8) | ((buf32[3] & 0x00ff00ff) << 8);
++        buf32[4] = ((buf32[4] & 0xff00ff00) >> 8) | ((buf32[4] & 0x00ff00ff) << 8);
++        buf32[5] = ((buf32[5] & 0xff00ff00) >> 8) | ((buf32[5] & 0x00ff00ff) << 8);
++        buf32[6] = ((buf32[6] & 0xff00ff00) >> 8) | ((buf32[6] & 0x00ff00ff) << 8);
++        buf32[7] = ((buf32[7] & 0xff00ff00) >> 8) | ((buf32[7] & 0x00ff00ff) << 8);
++        buf32 += 8;
++        u32_cnt -= 8;
++    }
++
++    while(u32_cnt) {
++        *buf32 = ((*buf32 & 0xff00ff00) >> 8) | ((*buf32 & 0x00ff00ff) << 8);
++        buf32++;
++        u32_cnt--;
++    }
++
++    if(buf_size_px & 0x1) {
++        uint32_t e = buf_size_px - 1;
++        buf16[e] = ((buf16[e] & 0xff00) >> 8) | ((buf16[e] & 0x00ff) << 8);
++    }
++
++}
++static int spi_lcd_updatearea(struct fb_vtable_s *vtable, FAR const struct fb_area_s *area)
++{
++  struct spi_dev_s *spi = g_spi_lcd_fb->spi;
++  int stride = g_spi_lcd_fb->planeinfo.stride;
++  int width_byte = area->w * (g_spi_lcd_fb->planeinfo.bpp >> 3);
++  unsigned char *fb = g_spi_lcd_fb->planeinfo.fbmem + area->y * stride + area->x * (g_spi_lcd_fb->planeinfo.bpp >> 3);
++
++  static uint8_t *swapped_datas;
++
++  if (!swapped_datas)
++  {
++    swapped_datas = malloc(stride);
++  }
++
++  LCD_SetWindows(area->x, area->y, area->x + area->w - 1, area->y + area->h - 1);
++  lcd_lock();
++  LCD_SetDataLine();
++  SPI_SELECT(spi, 0, true);
++  for (int y = area->y; y < area->y + area->h; y++)
++  {
++    memcpy(swapped_datas, fb, width_byte);
++    sw_rgb565_swap(swapped_datas, area->w);
++    SPI_SNDBLOCK(spi, swapped_datas, width_byte);
++    fb += stride;
++  }
++  SPI_SELECT(spi, 0, false);
++  lcd_unlock();
++  return 0;
++}
++/****************************************************************************
++ * Public Functions
++ ****************************************************************************/
++
++/****************************************************************************
++ * Name: spi_lcd_fb_register
++ ****************************************************************************/
++
++int spi_lcd_fb_register(int display, struct spi_dev_s *spi)
++{
++  FAR struct spi_lcd_fb_s *fb;
++  int ret = OK;
++
++  fb = kmm_zalloc(sizeof(*fb));
++  if (fb == NULL)
++    {
++      return -ENOMEM;
++    }
++  
++  fb->spi = spi;
++
++  fb->videoinfo.xres = 320;
++  fb->videoinfo.yres = 480;
++  fb->videoinfo.nplanes = 1;
++  fb->videoinfo.fmt = FB_FMT_RGB16_565;
++
++  fb->planeinfo.bpp = 16;
++  fb->planeinfo.stride = fb->videoinfo.xres * (fb->planeinfo.bpp >> 3);
++  fb->planeinfo.yres_virtual = fb->videoinfo.yres ;
++  fb->planeinfo.xres_virtual = fb->videoinfo.xres;
++
++  fb->planeinfo.fblen = fb->planeinfo.stride * fb->planeinfo.yres_virtual;
++  fb->unalign_fb = kmm_zalloc(fb->planeinfo.fblen + 64); /* LVGL对Framebuffer有64字节对齐要求,多分配64字节以免越界 */
++  fb->planeinfo.fbmem = (void *)(((uint32_t)fb->unalign_fb + 63) & ~63UL);
++  syslog(LOG_DEBUG, "fb_register_device: unalign_fb = %p, fbmem=%p\n", fb->unalign_fb, fb->planeinfo.fbmem);
++  if (fb->planeinfo.fbmem == NULL)
++    {
++      gerr("ERROR: Failed to allocate framebuffer memory: %zu KB\n",
++           fb->planeinfo.fblen / 1024);
++      ret = -ENOMEM;
++      goto err_fbmem_alloc_failed;
++    }
++
++  fb->vtable.getplaneinfo = spi_lcd_getplaneinfo;
++  fb->vtable.getvideoinfo = spi_lcd_getvideoinfo;
++  fb->vtable.updatearea = spi_lcd_updatearea;
++
++  ret = fb_register_device(display, 0, (FAR struct fb_vtable_s *)fb);
++  if (ret < 0)
++    {
++      goto err_fb_register_failed;
++    }
++
++  g_spi_lcd_fb = fb;
++
++  /* init spi lcd */
++  SPI_LCD_Pin_Init();
++  LCD_Init();
++
++  /* create kthread : copy framebuffer to lcd */
++  //kthread_create("spi_lcd_thread", SCHED_PRIORITY_DEFAULT, 8000, spi_lcd_thread_func, NULL);
++
++  return OK;
++
++err_fb_register_failed:
++  kmm_free(fb->unalign_fb);
++err_fbmem_alloc_failed:
++  kmm_free(fb);
++  return ret;
++}
