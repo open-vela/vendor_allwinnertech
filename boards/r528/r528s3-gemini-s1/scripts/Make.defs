@@ -146,7 +146,8 @@ endef
 # goldfish-armeabi-v7a-ap board.
 #---------------------------------------------------------------------------
 ifeq ($(CONFIG_QUICKAPP),y)
-QUICKAPP_PREBUILT_DIR := $(TOPDIR)/../vendor/openvela/boards/vela/libs/armv7a_cmake
+QUICKAPP_PREBUILT_DIR = $(TOPDIR)/../vendor/openvela/boards/vela/libs/armv7a_cmake
+EXTRA_LIBS += -Wl,--whole-archive
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libapps_vapp.a
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libquickapp.a
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libquickappfeatures.a
@@ -156,4 +157,5 @@ EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibfeature.a
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/libuikit.a
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibmedia.a
 EXTRA_LIBS += $(QUICKAPP_PREBUILT_DIR)/liblibpfw.a
+EXTRA_LIBS += -Wl,--no-whole-archive
 endif
