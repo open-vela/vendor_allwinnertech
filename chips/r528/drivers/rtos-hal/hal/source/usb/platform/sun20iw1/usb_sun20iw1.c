@@ -7,7 +7,6 @@
 #define USB_GIC_OFFSET 0
 #endif
 
-/*
 static const struct platform_usb_config usb_ehci_table[] = {
 	{//ehci-0
 		.name    = "sunxi-ehci0",
@@ -53,7 +52,7 @@ static const struct platform_usb_config usb_ohci_table[] = {
 		.phy_rst  = RST_USB_PHY1
 	}
 };
-*/
+
 static const struct platform_usb_config usb_otg_table = {
 	.name    = "sunxi-otg",
 	.pbase   = SUNXI_USB_OTG_PBASE,
@@ -81,7 +80,6 @@ static const struct platform_usb_port_config usb_port_table = {
 };
 #endif
 
-/*
 struct platform_usb_config *platform_get_ehci_table(void)
 {
 	return (struct platform_usb_config *)usb_ehci_table;
@@ -91,7 +89,6 @@ struct platform_usb_config *platform_get_ohci_table(void)
 {
 	return (struct platform_usb_config *)usb_ohci_table;
 }
-*/
 
 struct platform_usb_config *platform_get_otg_table(void)
 {

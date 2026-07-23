@@ -36,6 +36,18 @@ CHIP_CSRCS += $(USB_PATH)/gadget/gadget.c
 #CHIP_CSRCS += $(USB_PATH)/gadget/gadget_hal.c
 endif
 
+ifeq ($(CONFIG_USB_HOST),y)
+CFLAGS += ${INCDIR_PREFIX}$(ARCH_USB_SRC_PATH)/uhc
+CFLAGS += ${INCDIR_PREFIX}$(ARCH_USB_SRC_PATH)/include
+CFLAGS += ${INCDIR_PREFIX}$(ARCH_USB_SRC_PATH)/common
+CHIP_CSRCS += $(USB_PATH)/uhc/ehci-driver.c
+CHIP_CSRCS += $(USB_PATH)/uhc/ehci-sunxi.c
+CHIP_CSRCS += $(USB_PATH)/uhc/sunxi-hci.c
+CHIP_CSRCS += $(USB_PATH)/uhc/uhc_board.c
+CHIP_CSRCS += $(USB_PATH)/uhc/uhc_platform.c
+CHIP_CSRCS += $(USB_PATH)/uhc/usbhost.c
+endif
+
 #ifeq ($(CONFIG_DRIVERS_USB_GADGET_ADB),y)
 #CFLAGS += ${INCDIR_PREFIX}$(ARCH_USB_SRC_PATH)/gadget
 #CHIP_CSRCS += $(USB_PATH)/gadget/function/adb.c
