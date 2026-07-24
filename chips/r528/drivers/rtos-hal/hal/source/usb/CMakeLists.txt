@@ -57,6 +57,26 @@ if(CONFIG_USB_GADGET)
     list(APPEND USB_SRCS ${USB_GADGET_CSRCS})
 endif()
 
+# USB HOST功能条件编译
+if(CONFIG_USB_HOST)
+	target_include_directories(
+		arch PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/include
+		${CMAKE_CURRENT_SOURCE_DIR}/common
+		${CMAKE_CURRENT_SOURCE_DIR}/uhc
+	)
+    # uhc源文件列表
+    set(USB_UHC_CSRCS
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/ehci-driver.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/ehci-sunxi.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/sunxi-hci.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/uhc_board.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/uhc_platform.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/uhc/usbhost.c
+    )
+    list(APPEND USB_SRCS ${USB_UHC_CSRCS})
+endif()
+
 # 注释保留原make.defs中的条件编译逻辑
 # if(CONFIG_DRIVERS_USB_GADGET_ADB)
 #     include_directories(${CMAKE_CURRENT_USB_PATH}/gadget)
