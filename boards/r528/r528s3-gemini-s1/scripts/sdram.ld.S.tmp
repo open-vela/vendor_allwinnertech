@@ -1,0 +1,92 @@
+MEMORY
+{
+    sdram (W!RX) : ORIGIN = 0x41400000, LENGTH = 961943040
+    reserve_dram (WRI) : ORIGIN = (0x48000000-102400), LENGTH = 102400
+}
+OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
+OUTPUT_ARCH(arm)
+ENTRY(entry)
+ENTRY(_stext)
+SECTIONS
+{
+    .text :
+    {
+        _stext = ABSOLUTE(.);
+        __text_start = .;
+        _head_start = ABSOLUTE(.);
+        KEEP(*(.head))
+        _head_end = ABSOLUTE(.);
+        *(.vectors)
+        *(.text .text.*)
+        *(.fixup)
+        *(.gnu.warning)
+        *(.rodata .rodata.*)
+        *(.gnu.linkonce.t.*)
+        *(.glue_7)
+        *(.glue_7t)
+        *(.got)
+        *(.gcc_except_table)
+        *(.gnu.linkonce.r.*)
+        *(.gnu.linkonce.armextab.*)
+        *(.ARM.extab*)
+        _etext = ABSOLUTE(.);
+    } > sdram
+    .ARM.exidx : ALIGN(4)
+    {
+        PROVIDE_HIDDEN (__exidx_start = .);
+        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+        PROVIDE_HIDDEN (__exidx_end = .);
+    } > sdram
+    .init_section :
+    {
+        _sinit = ABSOLUTE(.);
+        KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+        KEEP(*(.init_array EXCLUDE_FILE(*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o) .ctors))
+        . = ALIGN(0x1000);
+        _einit = ABSOLUTE(.);
+    } > sdram
+    .data :
+    {
+        _sdata = ABSOLUTE(.);
+        *(.data .data.*)
+        *(.gnu.linkonce.d.*)
+        CONSTRUCTORS
+        . = ALIGN(4);
+        _edata = ABSOLUTE(.);
+        KEEP(*(SORT(.miio_addon_list*)));
+        KEEP(*(SORT(.scattered_array*)));
+    } > sdram
+ .reboot_custom_param (NOLOAD) :
+ {
+  KEEP(*(.reboot_custom_param*))
+  . = ALIGN(4);
+  __reboot_custom_param_end__ = .;
+ } > reserve_dram
+    .noinit :
+    {
+        _snoinit = ABSOLUTE(.);
+        *(.noinit*)
+        _enoinit = ABSOLUTE(.);
+    } > sdram
+    .bss :
+    {
+        _sbss = ABSOLUTE(.);
+        *(.bss .bss.*)
+        *(.gnu.linkonce.b.*)
+        *(COMMON)
+        . = ALIGN(4);
+        _ebss = ABSOLUTE(.);
+    } > sdram
+    .stab 0 : { *(.stab) }
+    .stabstr 0 : { *(.stabstr) }
+    .stab.excl 0 : { *(.stab.excl) }
+    .stab.exclstr 0 : { *(.stab.exclstr) }
+    .stab.index 0 : { *(.stab.index) }
+    .stab.indexstr 0 : { *(.stab.indexstr) }
+    .comment 0 : { *(.comment) }
+    .debug_abbrev 0 : { *(.debug_abbrev) }
+    .debug_info 0 : { *(.debug_info) }
+    .debug_line 0 : { *(.debug_line) }
+    .debug_pubnames 0 : { *(.debug_pubnames) }
+    .debug_aranges 0 : { *(.debug_aranges) }
+}
