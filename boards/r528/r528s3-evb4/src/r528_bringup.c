@@ -41,6 +41,10 @@
 #  include <sys/mount.h>
 #endif
 
+#if defined(CONFIG_SUNXI_USBEHCI) || defined(CONFIG_USBHOST)
+extern int sunxi_usbhost_initialize(void);
+#endif
+
 #include <syslog.h>
 
 #include "r528_board.h"
@@ -74,6 +78,15 @@ int r528_bringup(void)
     {
       syslog(LOG_ERR, "ERROR: Failed to mount procfs at /proc: %d\n", ret);
     }
+#endif
+
+#if defined(CONFIG_SUNXI_USBEHCI) || defined(CONFIG_USBHOST)
+  /* sunxi usb host controller driver initialiize */
+
+  if (sunxi_usbhost_initialize() < 0)
+    {
+	  syslog(LOG_ERR, "ERROR: Couldn't start usb ehci\n");
+	}
 #endif
 
   return ret;

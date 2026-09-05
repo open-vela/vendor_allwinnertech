@@ -59,6 +59,8 @@
 #include "sunxi_hal_spi.h"
 
 #define SPI_FREQUENCY_40M 40000000
+#define SPI_FREQUENCY_60M 60000000
+#define SPI_FREQUENCY_80M 80000000
 #define SPI_FREQUENCY_10M 10000000
 
 /****************************************************************************
@@ -196,7 +198,7 @@ static struct sunxi_spi_priv_s sunxi_spi1_priv =
         {
             .flash = 0,
             .bit_order = HAL_SPI_MASTER_MSB_FIRST,
-            .clock_frequency = SPI_FREQUENCY_40M,
+            .clock_frequency = SPI_FREQUENCY_60M,
             .cpha = HAL_SPI_MASTER_CLOCK_PHASE0,  /* SPI Mode 0: 第一个边沿采样 */
             .cpol = HAL_SPI_MASTER_CLOCK_PHASE0,  /* SPI Mode 0: 时钟空闲为低 */
             .slave_port = 0,  /* CS0 */

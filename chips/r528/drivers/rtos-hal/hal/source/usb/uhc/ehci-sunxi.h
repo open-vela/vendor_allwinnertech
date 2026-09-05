@@ -1,20 +1,19 @@
-/*
- * Copyright (c) 2019-2025 Allwinner Technology Co., Ltd. ALL rights reserved.
- *
+/* Copyright (c) 2019-2025 Allwinner Technology Co., Ltd. ALL rights reserved.
+
  * Allwinner is a trademark of Allwinner Technology Co.,Ltd., registered in
  * the the People's Republic of China and other countries.
  * All Allwinner Technology Co.,Ltd. trademarks are used with permission.
- *
+
  * DISCLAIMER
  * THIRD PARTY LICENCES MAY BE REQUIRED TO IMPLEMENT THE SOLUTION/PRODUCT.
- * IF YOU NEED TO INTEGRATE THIRD PARTY��S TECHNOLOGY (SONY, DTS, DOLBY, AVS OR MPEGLA, ETC.)
- * IN ALLWINNERS SDK OR PRODUCTS, YOU SHALL BE SOLELY RESPONSIBLE TO OBTAIN
+ * IF YOU NEED TO INTEGRATE THIRD PART'S TECHNOLOGY (SONY, DTS, DOLBY, AVS OR MPEGLA, ETC.)
+ * IN ALLWINNER'SDK OR PRODUCTS, YOU SHALL BE SOLELY RESPONSIBLE TO OBTAIN
  * ALL APPROPRIATELY REQUIRED THIRD PARTY LICENCES.
  * ALLWINNER SHALL HAVE NO WARRANTY, INDEMNITY OR OTHER OBLIGATIONS WITH RESPECT TO MATTERS
  * COVERED UNDER ANY REQUIRED THIRD PARTY LICENSE.
- * YOU ARE SOLELY RESPONSIBLE FOR YOUR USAGE OF THIRD PARTY��S TECHNOLOGY.
- *
- *
+ * YOU ARE SOLELY RESPONSIBLE FOR YOUR USAGE OF THIRD PART'S TECHNOLOGY.
+
+
  * THIS SOFTWARE IS PROVIDED BY ALLWINNER"AS IS" AND TO THE MAXIMUM EXTENT
  * PERMITTED BY LAW, ALLWINNER EXPRESSLY DISCLAIMS ALL WARRANTIES OF ANY KIND,
  * WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION REGARDING
@@ -29,16 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef __EHCI_SUNXI_H__
+#define __EHCI_SUNXI_H__
 
-#ifndef __USB_SUN20IW1_H__
-#define __USB_SUN20IW1_H__
+#include "usb/uhc/sunxi-hci.h"
 
-/*hci controller num*/
+static struct sunxi_hci sunxi_ehci[USB_MAX_CONTROLLER_COUNT] = { 0 };
+static inline struct sunxi_hci *sunxi_ehci_get_by_usbhwc_num(int usbhwc_num)
+{
+	if (usbhwc_num >= USB_MAX_CONTROLLER_COUNT) {
+		uhc_err("usbhwc_num(%d) >= USB_MAX_CONTROLLER_COUNT(%d)\n", usbhwc_num,
+			USB_MAX_CONTROLLER_COUNT);
+		uhc_err("get sunxi echi(%d) structure failed\n", usbhwc_num);
+		return NULL;
+	}
+	return (struct sunxi_hci *)&sunxi_ehci[usbhwc_num];
+}
 
-#define USB_MAX_CONTROLLER_COUNT	2
-
-#define SUNXI_USB_OTG_PBASE		    0x04100000
-#define SUNXI_USB_HCI0_PBASE		0x04101000
-#define SUNXI_USB_HCI1_PBASE		0x04200000
+int sunxi_ehci_sxhci_initial(struct sunxi_hci *sx_ehci, int usbhwc_num);
 
 #endif
