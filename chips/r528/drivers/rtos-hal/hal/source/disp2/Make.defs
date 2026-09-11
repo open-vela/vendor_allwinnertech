@@ -33,7 +33,12 @@ endif
 endif
 
 ifeq ($(CONFIG_ARCH_BOARD_R528S3_GEMINI_S1), y)
+ifeq ($(CONFIG_LCD_SUPPORT_T070S140B),y)
 CHIP_CSRCS += $(DISP_PATH)/soc/t070s140b_mipi_config.c
+endif
+ifeq ($(CONFIG_LCD_SUPPORT_BOE_1200X1920),y)
+CHIP_CSRCS += $(DISP_PATH)/soc/BOE_1200x1920_mipi_config.c
+endif
 endif
 
 
@@ -106,6 +111,10 @@ endif
 
 ifeq ($(CONFIG_LCD_SUPPORT_T070S140B),y)
 CHIP_CSRCS += $(DISP_PATH)/disp/lcd/t070s140b.c
+endif
+
+ifeq ($(CONFIG_LCD_SUPPORT_BOE_1200X1920),y)
+CHIP_CSRCS += $(DISP_PATH)/disp/lcd/BOE_1200x1920.c
 endif
 
 ifeq ($(CONFIG_LCD_SUPPORT_SSD1306),y)
