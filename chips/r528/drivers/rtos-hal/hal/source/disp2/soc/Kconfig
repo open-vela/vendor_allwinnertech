@@ -47,6 +47,12 @@ config T070S140B_MIPI
 	---help---
 	  board, disp with T070S140B MIPI 1024x600 panel
 
+config BOE_1200X1920_MIPI
+	bool "board, disp with BOE 1200x1920 MIPI"
+	default n
+	---help---
+	  board, disp with BOE MIPI 1200x1920 panel
+
 config SSD1306_SPI
 	bool "board, disp with SSD1306 SPI"
 	default n

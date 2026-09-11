@@ -417,8 +417,17 @@ s32 dsi_dcs_wr_memory(u32 sel, u32 *p_data, u32 length)
 s32 dsi_gen_wr(u32 sel, u8 cmd, u8 *para_p, u32 para_num)
 {
 	volatile u8 *p = (u8 *) dsi_dev[sel]->dsi_cmd_tx;
-	while (dsi_inst_busy(sel))
-		;
+	u32 count = 0;
+
+	while ((dsi_dev[sel]->dsi_basic_ctl0.bits.inst_st == 1)
+	    && (count < 50)) {
+		count++;
+		dsi_delay_us(100);
+	}
+	if (count >= 50) {
+		dsi_dev[sel]->dsi_basic_ctl0.bits.inst_st = 0;
+		DISP_PRINT("dsi_gen_wr inst busy timeout, sel=%d\n", sel);
+	}
 	if (para_num == 0) {
 		*(p++) = DSI_DT_GEN_WR_P1;
 		*(p++) = cmd;

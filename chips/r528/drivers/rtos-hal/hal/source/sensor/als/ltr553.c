@@ -344,34 +344,66 @@ static int ltr553_thread(int argc, char **argv) {
 
     /* 读取ALS数据 */
     if (priv->sensors[LTR553_SENSOR_ALS].enabled) {
-      /* 始终读取ALS数据*/
-      ret = ltr553_get_reg16(priv, LTR553_ALS_DATA_CH0_0, &ch0_data);
-      if (ret >= 0) {
-        ret = ltr553_get_reg16(priv, LTR553_ALS_DATA_CH1_0, &ch1_data);
-        if (ret >= 0) {
-          /* 强制计算勒克斯值 */
-          if (ch0_data > 0) {
-            float ratio = (float)ch1_data / (float)ch0_data;
-            if (ratio < 0.45f) {
-              priv->lux = (1.7743f * ch0_data) + (1.1059f * ch1_data);
-            } else if (ratio < 0.64f) {
-              priv->lux = (4.2785f * ch0_data) - (1.9548f * ch1_data);
-            } else if (ratio < 0.85f) {
-              priv->lux = (0.5926f * ch0_data) - (0.1185f * ch1_data);
-            } else {
-              priv->lux = 0.0f;
-            }
+      /* 2026-09-04 P155 修复（对照 LTR-553ALS-01 datasheet + Android 同芯片
+       * 驱动 ltr553.c 交叉验证）：
+       * ①STATUS(0x8C) 的 ALS 数据有效位是 bit7(0x80)、低有效——
+       *   0x00=新数据有效可读；0x80=数据无效/更新中，须丢弃等待。
+       *   （P154 误用 bit1——那是 PS 中断位，导致有效数据被误判丢弃）
+       * ②有效时才读 CH0/CH1：读取数据寄存器会清除状态新数据标志，
+       *   无效时读会丢下一次"数据就绪"边沿。
+       * ③I2C 读取失败 → 跳过本次采样，绝不无条件 push priv->lux
+       *   （activate 时被重置 0.0f，读失败仍推 0 会误报"亮度 0"）。 */
+      if ((status & 0x80) != 0) {
+        /* ALS 数据无效/未就绪：丢弃本次，等下一次转换完成 */
+        continue;
+      }
 
-            if (priv->lux < 0) {
-              priv->lux = 0.0f;
-            }
+      ret = ltr553_get_reg16(priv, LTR553_ALS_DATA_CH0_0, &ch0_data);
+      if (ret < 0) {
+        continue;   /* I2C 失败：跳过本次采样，不 push */
+      }
+      ret = ltr553_get_reg16(priv, LTR553_ALS_DATA_CH1_0, &ch1_data);
+      if (ret < 0) {
+        continue;
+      }
+
+      if (ch0_data > 0) {
+        /* 校正因子（与 ltr553_fetch 同步） */
+        static const float int_factors_t[] = {
+          2.0f, 1.0f, 0.5f, 0.25f, 0.667f, 0.4f, 0.333f, 0.286f
+        };
+        static const float gain_factors_t[] = {
+          1.0f, 0.5f, 0.25f, 0.125f, 1.0f, 1.0f, 0.0208f, 0.0104f
+        };
+        int t_int_idx = (priv->als_integration_time >> 3) & 0x07;
+        int t_gain_idx = (priv->als_gain >> 2) & 0x07;
+        float t_correction = int_factors_t[t_int_idx] * gain_factors_t[t_gain_idx];
+
+        float ratio = (float)ch1_data / (float)ch0_data;
+        if (ratio < 0.45f) {
+          priv->lux = (1.7743f * ch0_data + 1.1059f * ch1_data) * t_correction;
+        } else if (ratio < 0.64f) {
+          priv->lux = (4.2785f * ch0_data - 1.9548f * ch1_data) * t_correction;
+        } else if (ratio < 0.85f) {
+          priv->lux = (0.5926f * ch0_data - 0.1185f * ch1_data) * t_correction;
+        } else {
+          /* ratio ≥0.85 + CH0<200：极暗环境最小估算（与 fetch 同步） */
+          if (ch0_data < 200) {
+            priv->lux = 0.1f * ch0_data * t_correction;
           } else {
             priv->lux = 0.0f;
           }
         }
+
+        if (priv->lux < 0) {
+          priv->lux = 0.0f;
+        }
+      } else {
+        /* CH0=0（真暗环境/遮光）：lux 保持 0（合法值，暗光提醒依赖它） */
+        priv->lux = 0.0f;
       }
 
-      /* 推送ALS数据 */
+      /* 推送ALS数据（仅有效数据） */
       light.timestamp = sensor_get_timestamp();
       light.light = priv->lux;
 
@@ -379,12 +411,6 @@ static int ltr553_thread(int argc, char **argv) {
         priv->sensors[LTR553_SENSOR_ALS].lower.push_event(
             priv->sensors[LTR553_SENSOR_ALS].lower.priv, &light,
             sizeof(struct sensor_light));
-
-        /* 增强显示 - 显示计算过程 */
-        int lux_int = (int)priv->lux;
-        int lux_frac = (int)((priv->lux - lux_int) * 100 + 0.5f);
-        sninfo("LTR553: ALS : %d.%02d lux (CH0=%d, CH1=%d)\n", lux_int, lux_frac,
-              ch0_data, ch1_data);
       }
     }
 
@@ -416,13 +442,6 @@ static int ltr553_thread(int argc, char **argv) {
         priv->sensors[LTR553_SENSOR_PS].lower.push_event(
             priv->sensors[LTR553_SENSOR_PS].lower.priv, &prox,
             sizeof(struct sensor_prox));
-
-        if (priv->proximity >= 0) {
-          int prox_int = (int)priv->proximity;
-          int prox_frac = (int)((priv->proximity - prox_int) * 100 + 0.5f);
-          sninfo("LTR553: PS : %d.%02d cm (Raw=%d)\n", prox_int, prox_frac,
-                ps_data);
-        }
       }
     }
 
@@ -472,12 +491,17 @@ static int ltr553_activate(FAR struct sensor_lowerhalf_s *lower,
   /* 配置传感器 */
   if (sensor->type == LTR553_SENSOR_ALS) {
     if (enabled) {
-      /* ALS配置保持不变 */
+      /* ALS配置：50ms 积分 + 1X 增益（提升低光灵敏度）。
+       * 同步 struct 字段供 ltr553_fetch 计算 lux 校正因子使用。 */
+      priv->als_integration_time = LTR553_ALS_INTEG_50MS;
+      priv->als_measurement_rate = LTR553_ALS_RATE_50MS;
+      priv->als_gain = LTR553_ALS_GAIN_1X;
       ret = ltr553_set_reg8(priv, LTR553_ALS_MEAS_RATE,
-                            LTR553_ALS_INTEG_50MS | LTR553_ALS_RATE_50MS);
+                            priv->als_integration_time |
+                            priv->als_measurement_rate);
       if (ret >= 0) {
         ret = ltr553_set_reg8(priv, LTR553_ALS_CONTR,
-                              LTR553_ALS_MODE_ACTIVE | LTR553_ALS_GAIN_1X);
+                              LTR553_ALS_MODE_ACTIVE | priv->als_gain);
         if (ret >= 0) {
           nxsig_usleep(100000);
           priv->lux = 0.0f;
@@ -556,7 +580,7 @@ static int ltr553_fetch(FAR struct sensor_lowerhalf_s *lower,
   if (!buffer || buflen == 0) {
     return -EINVAL;
   }
-  sninfo("%s:%d %d", __func__, __LINE__, sensor->type);
+  /* sninfo removed: 高频日志刷屏影响 WiFi 稳定性 */
   /* 获取设备指针 */
   if (sensor->type == LTR553_SENSOR_ALS) {
     priv = container_of(sensor, FAR struct ltr553_dev_s,
@@ -588,17 +612,56 @@ static int ltr553_fetch(FAR struct sensor_lowerhalf_s *lower,
       if (ret >= 0) {
         ret = ltr553_get_reg16(priv, LTR553_ALS_DATA_CH1_0, &ch1_data);
         if (ret >= 0) {
-          /* 强制计算勒克斯值 */
+          /* 强制计算勒克斯值
+           * 系数基准：100ms 积分时间 + 1X 增益（LTR-553ALS-01 datasheet）。
+           * 实际积分时间/增益可能不同，需乘校正因子：
+           *   int_factor = 100 / actual_integ_ms
+           *   gain_factor = 1.0 / actual_gain
+           * Android ltr553_calc_lux 同理（见 int_fac / gain_fac 表）。
+           * 当前配置：activate() 写入 INTEG_50MS + GAIN_1X → factor = 2.0 */
+          static const float int_factors[] = {
+            2.0f,   /* 50ms  → 100/50 = 2.0 */
+            1.0f,   /* 100ms → 100/100 = 1.0 (datasheet 基准) */
+            0.5f,   /* 200ms → 100/200 = 0.5 */
+            0.25f,  /* 400ms → 100/400 = 0.25 */
+            0.667f, /* 150ms → 100/150 ≈ 0.667 */
+            0.4f,   /* 250ms → 100/250 = 0.4 */
+            0.333f, /* 300ms → 100/300 ≈ 0.333 */
+            0.286f  /* 350ms → 100/350 ≈ 0.286 */
+          };
+          static const float gain_factors[] = {
+            1.0f,   /* 1X  */
+            0.5f,   /* 2X  */
+            0.25f,  /* 4X  */
+            0.125f, /* 8X  */
+            1.0f,   /* (5 reserved) */
+            1.0f,   /* (6 reserved) */
+            0.0208f,/* 48X → 1/48 */
+            0.0104f /* 96X → 1/96 */
+          };
+          int int_idx = (priv->als_integration_time >> 3) & 0x07;
+          int gain_idx = (priv->als_gain >> 2) & 0x07;
+          float correction = int_factors[int_idx] * gain_factors[gain_idx];
+
           if (ch0_data > 0) {
             float ratio = (float)ch1_data / (float)ch0_data;
             if (ratio < 0.45f) {
-              priv->lux = (1.7743f * ch0_data) + (1.1059f * ch1_data);
+              priv->lux = (1.7743f * ch0_data + 1.1059f * ch1_data) * correction;
             } else if (ratio < 0.64f) {
-              priv->lux = (4.2785f * ch0_data) - (1.9548f * ch1_data);
+              priv->lux = (4.2785f * ch0_data - 1.9548f * ch1_data) * correction;
             } else if (ratio < 0.85f) {
-              priv->lux = (0.5926f * ch0_data) - (0.1185f * ch1_data);
+              priv->lux = (0.5926f * ch0_data - 0.1185f * ch1_data) * correction;
             } else {
-              priv->lux = 0.0f;
+              /* ratio ≥0.85：CH0≈CH1，极暗/噪声主导。
+               * datasheet 原算法返回0，但在真实暗光环境（CH0=11,CH1=11）
+               * 会锁死0。改为基于 CH0 的最小线性估算：
+               * 典型暗光 CH0≈10~50 → lux≈1~5，合理反映「极暗但非全黑」。
+               * 高 CH0 值（>200）时 ratio≥0.85 才可能是异常，保持0。 */
+              if (ch0_data < 200) {
+                priv->lux = 0.1f * ch0_data * correction;
+              } else {
+                priv->lux = 0.0f;
+              }
             }
 
             if (priv->lux < 0) {
@@ -617,8 +680,6 @@ static int ltr553_fetch(FAR struct sensor_lowerhalf_s *lower,
       struct sensor_light *als_data = (struct sensor_light *)buffer;
       als_data->timestamp = timestamp;
       als_data->light = priv->lux;
-      sninfo("%s:%d %d %llu %.02f", __func__, __LINE__, sensor->type, timestamp,
-            als_data->light);
       return sizeof(struct sensor_light);
     }
   }
@@ -651,8 +712,6 @@ static int ltr553_fetch(FAR struct sensor_lowerhalf_s *lower,
       struct sensor_prox *ps_data = (struct sensor_prox *)buffer;
       ps_data->timestamp = timestamp;
       ps_data->proximity = priv->proximity;
-      sninfo("%s:%d %d %llu %.02f", __func__, __LINE__, sensor->type, timestamp,
-            ps_data->proximity);
       return sizeof(struct sensor_prox);
     }
   }
