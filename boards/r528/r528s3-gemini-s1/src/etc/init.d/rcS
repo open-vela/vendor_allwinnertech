@@ -21,8 +21,39 @@
 
 set +e
 
+/* The RTC and NTP client keep UTC.  Present UI and system logs in China
+ * Standard Time after automatic synchronization. */
+export TZ CST-8
+
 #ifdef CONFIG_GEMINI_S1_NSH
 #include "rcS.nsh"
+#endif
+
+/* Load per-board credentials from the writable data image.  The helper
+ * starts NTP only after DHCP succeeds and a usable route exists. */
+#ifdef CONFIG_IEEE80211_REALTEK_WIFI
+if [ -f /data/etc/wifi/wapi.conf ]
+then
+  echo "wifi already started"
+fi
+#endif
+
+/* The native UI drives pcm0p through NxPlayer directly.  Keep mediad for
+ * other Gemini configurations, but avoid a second audio owner beside the
+ * openvela_ui process. */
+#if defined(CONFIG_MEDIA_SERVER) && !defined(CONFIG_LVX_USE_DEMO_OPENVELA_UI)
+mediad &
+sleep 1
+#endif
+
+#ifdef CONFIG_LVX_USE_DEMO_OPENVELA_UI
+openvela_ui &
+#endif
+
+/* The agent owns long-lived cron, Tool, Skill and QuickApp bridge services.
+ * Detach stdin so its optional interactive CLI cannot consume the NSH console. */
+#ifdef CONFIG_EXAMPLES_AI_AGENT_VELA
+ai_agent < /dev/null &
 #endif
 
 #ifdef CONFIG_X4B_BL
