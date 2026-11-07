@@ -129,7 +129,11 @@ static void r528_gpadc_shutdown(FAR struct adc_dev_s *dev)
 	DEBUGASSERT(priv);
 
 	channel_in = priv->am_channel;
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+	(void)channel_in;
+#else
 	hal_gpadc_channel_exit(channel_in);
+#endif
 }
 
 static void r528_gpadc_rxint(FAR struct adc_dev_s *dev, bool enable)
@@ -151,7 +155,7 @@ static void adc_read_work(struct adc_dev_s *dev)
 	int channel_in;
 	uint32_t value;
 	FAR struct sunxi_gpadc_lowerhalf_s *priv = (FAR struct sunxi_gpadc_lowerhalf_s *)dev->ad_priv;
- 	value = gpadc_read_channel_data(0);
+	value = gpadc_read_channel_data(priv->am_channel);
 	channel_in = priv->am_channel;
 
 	priv->cb->au_receive(dev, channel_in, value);

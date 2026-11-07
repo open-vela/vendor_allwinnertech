@@ -29,6 +29,13 @@ config SENSORS_SGP30_UORB
     ---help---
         Enable driver for SGP30 co2 and tvoc sensor.
 
+config SENSORS_ICM20948
+    bool "ICM20948 9-axis Sensor"
+    default n
+    depends on SPI
+    ---help---
+        Enable support for the ICM20948 9-axis sensor driver.
+
 if SENSORS_LTR553
 config LTR553_I2C_FREQUENCY
     int "LTR553 I2C frequency"

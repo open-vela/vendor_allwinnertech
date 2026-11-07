@@ -46,6 +46,12 @@
 #define	UART_REG_ADDR	(0x02500800)
 #elif defined (CONFIG_ARCH_BOARD_R528S3_DSHANPI)
 #define	UART_REG_ADDR	(0x02500C00)	
+#elif defined (CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#  if defined(CONFIG_UART2_SERIAL_CONSOLE)
+#    define	UART_REG_ADDR	(0x02500800)
+#  else
+#    define	UART_REG_ADDR	(0x02500000)
+#  endif
 #else
 #define	UART_REG_ADDR	(0x02500000)
 #endif

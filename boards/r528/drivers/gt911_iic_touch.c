@@ -34,7 +34,12 @@
 #include "hal_gpio.h"
 #include "gt911_iic_touch.h"
 
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define POLL_MINDELAY  (10)
+#else
 #define POLL_MINDELAY  (5)
+#endif
+
 #define POLL_MAXDELAY  (30)
 #define POLL_INCREMENT (5)
 
@@ -259,6 +264,15 @@ static int gt911_touch_process_data(FAR struct gt911_touch_dev_s *priv,FAR struc
 
   for (int i = 0; i < sample->npoints; i++)
   {
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#ifdef CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT
+    sample->point[i].x        = HD40007C30_LCD_HEIGHT - TOUCH_POINT_GET_Y(raw->touch[i]);
+    sample->point[i].y        = TOUCH_POINT_GET_X(raw->touch[i]);
+#else
+    sample->point[i].x        = TOUCH_POINT_GET_X(raw->touch[i]);
+    sample->point[i].y        = TOUCH_POINT_GET_Y(raw->touch[i]);
+#endif
+#else
 #ifdef CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT
     // sample->point[i].x        = TOUCH_POINT_GET_Y(raw->touch[i]);
     // sample->point[i].y        = T070S140B_LCD_WIDTH - TOUCH_POINT_GET_X(raw->touch[i]);
@@ -267,6 +281,7 @@ static int gt911_touch_process_data(FAR struct gt911_touch_dev_s *priv,FAR struc
 #else
     sample->point[i].x        = T070S140B_LCD_WIDTH - TOUCH_POINT_GET_X(raw->touch[i]);
     sample->point[i].y        = T070S140B_LCD_HEIGHT - TOUCH_POINT_GET_Y(raw->touch[i]);
+#endif
 #endif
     sample->point[i].id       = TOUCH_POINT_GET_ID(raw->touch[i]);
     sample->point[i].h        = 0;

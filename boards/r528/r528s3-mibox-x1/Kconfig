@@ -1,0 +1,27 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+config ARCH_BOARD_R528S3_MIBOX_X1
+	bool "r528 mibox x1"
+	depends on ARCH_CHIP_R528
+	select ARCH_HAVE_LEDS
+	---help---
+		NuttX port for the Allwinner R528 based MIBOX-X1 board.
+		On-board peripherals: 128MB DDR3, 256MB SPI NAND, 480x480 MIPI DSI
+		panel (ST7701S) with GT911 capacitive touch, RTL8723DS Wi-Fi/BT,
+		ICM20948 9-axis IMU, NS4150B audio PA, and a coin-cell backed RTC.
+
+config ARCH_BOARD_PARTITION_TABLE
+	string "board partition table path"
+	default ""
+	---help---
+		This is a path for the board.
+
+choice
+prompt "choose system function"
+
+config MIBOX_X1_NSH
+	bool "Enable the NSH function on the 'MIBOX-X1' board"
+
+endchoice
