@@ -5,8 +5,13 @@
 
 // clang-format off
 #define SUNXI_IRTX_PBASE        0x02003000
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define IRADC_PIN               GPIO_PE17
+#define IR_MUXSEL               4
+#else
 #define IRADC_PIN               GPIO_PB0
 #define IR_MUXSEL               3
+#endif
 
 #define SUNXI_IRTX_RESET_TYPE   HAL_SUNXI_RESET
 #define SUNXI_IRTX_CLK_TYPE     HAL_SUNXI_CCU

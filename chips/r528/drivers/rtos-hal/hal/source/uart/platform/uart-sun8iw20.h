@@ -169,9 +169,14 @@
 #define UART3_RTS       GPIOD(13)
 #define UART3_CTS       GPIOD(14)
 
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define UART4_TX		GPIOD(7)
+#define UART4_RX		GPIOD(8)
+#else
 /*no support*/
 #define UART4_TX		GPIOD(10)
 #define UART4_RX		GPIOD(11)
+#endif
 #define UART5_TX		GPIOD(10)
 #define UART5_RX		GPIOD(11)
 

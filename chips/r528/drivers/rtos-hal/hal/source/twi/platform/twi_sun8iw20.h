@@ -48,6 +48,10 @@
 #define TWI0_SDA GPIOB(2)
 #define TWI0_SCK GPIOB(3)
 #define TWI0_PIN_MUXSEL 4
+#elif defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define TWI0_SDA GPIOB(11)
+#define TWI0_SCK GPIOB(10)
+#define TWI0_PIN_MUXSEL 4
 #else
 #define TWI0_SDA GPIOB(2)
 #define TWI0_SCK GPIOB(3)
@@ -71,6 +75,10 @@
 #define TWI2_SDA GPIOB(9)
 #define TWI2_PIN_MUXSEL 4
 #elif defined(CONFIG_ARCH_BOARD_R528S3_X4B)
+#define TWI2_SCK GPIOB(0)
+#define TWI2_SDA GPIOB(1)
+#define TWI2_PIN_MUXSEL 4
+#elif defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
 #define TWI2_SCK GPIOB(0)
 #define TWI2_SDA GPIOB(1)
 #define TWI2_PIN_MUXSEL 4

@@ -784,6 +784,9 @@ void r528_late_initialize(void)
 #else
 	r528_pwm_initialize("/dev/pwm0", 0);
 #endif
+#ifdef CONFIG_ARCH_BOARD_R528S3_MIBOX_X1
+  r528_pwm_initialize("/dev/pwm1", 3);
+#endif
 #endif
 
 #ifdef CONFIG_DRIVERS_TWI
@@ -803,8 +806,13 @@ void r528_late_initialize(void)
 #ifdef CONFIG_GT911_IIC_TOUCH
   extern int gt911_register(FAR const char *devpath,
                             FAR struct i2c_master_s *dev);
+#ifdef CONFIG_ARCH_BOARD_R528S3_MIBOX_X1
+  if (i2c_bus2)
+    gt911_register("/dev/input0", i2c_bus2);
+#else
   if (i2c_bus0)
     gt911_register("/dev/input0", i2c_bus0);
+#endif
 #endif
 
 #ifdef CONFIG_SENSORS_SHTC3
@@ -843,6 +851,9 @@ void r528_late_initialize(void)
 
 #ifdef CONFIG_DRIVERS_GPADC
 	r528_gpadc_initialize("/dev/adc0", 0);
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+	r528_gpadc_initialize("/dev/adc1", 1);
+#endif
 #endif
 
 #ifdef CONFIG_DRIVERS_LRADC
@@ -941,6 +952,22 @@ void r528_late_initialize(void)
 #if  defined(CONFIG_LCD_SSD1306_SPI_HW) || defined(CONFIG_LCD_ILI9341_HARDWARE_SPI) ||defined(CONFIG_LCD_ST7789_HARDWARE_SPI)
 extern struct spi_dev_s *sunxi_spibus_initialize(int port);
     sunxi_spibus_initialize(1);
+#endif
+
+#ifdef CONFIG_ARCH_BOARD_R528S3_MIBOX_X1
+  extern struct spi_dev_s *sunxi_spibus_initialize(int port);
+  sunxi_spibus_initialize(1);
+#endif
+
+#ifdef CONFIG_SENSORS_ICM20948
+  {
+    extern struct spi_dev_s *sunxi_spibus_initialize(int port);
+    extern int icm20948_register(int port, FAR struct spi_dev_s *spi);
+    FAR struct spi_dev_s *spidev = sunxi_spibus_initialize(1);
+
+    if (spidev)
+      icm20948_register(1, spidev);
+  }
 #endif
 
 #ifdef CONFIG_SPI_LCD_FB

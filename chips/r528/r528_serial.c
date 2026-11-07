@@ -165,6 +165,11 @@ static char g_uart3rxbuffer[CONFIG_UART3_RXBUFSIZE];
 static char g_uart3txbuffer[CONFIG_UART3_TXBUFSIZE];
 #endif
 
+#ifdef CONFIG_R528_UART4
+static char g_uart4rxbuffer[CONFIG_UART4_RXBUFSIZE];
+static char g_uart4txbuffer[CONFIG_UART4_TXBUFSIZE];
+#endif
+
 /* This describes the state of the A1X UART0 port. */
 
 #ifdef CONFIG_R528_UART0
@@ -293,6 +298,38 @@ static uart_dev_t g_uart3port =
 };
 #endif
 
+/* This describes the state of the A1X UART4 port. */
+
+#ifdef CONFIG_R528_UART4
+static struct up_dev_s g_uart4priv =
+{
+  .uartbase       = R528_UART4_VADDR,
+  .baud           = CONFIG_UART4_BAUD,
+  .irq            = R528_IRQ_UART4,
+  .parity         = CONFIG_UART4_PARITY,
+  .bits           = CONFIG_UART4_BITS,
+  .stopbits2      = CONFIG_UART4_2STOP,
+  .hwflowctrl     = false,
+  .port           = 4,
+};
+
+static uart_dev_t g_uart4port =
+{
+  .recv     =
+  {
+    .size   = CONFIG_UART4_RXBUFSIZE,
+    .buffer = g_uart4rxbuffer,
+  },
+  .xmit     =
+  {
+    .size   = CONFIG_UART4_TXBUFSIZE,
+    .buffer = g_uart4txbuffer,
+  },
+  .ops      = &g_uart_ops,
+  .priv     = &g_uart4priv,
+};
+#endif
+
 
 /* Which UART with be tty0/console and which tty1-7?  The console will always
  * be ttyS0.  If there is no console then will use the lowest numbered UART.
@@ -316,6 +353,10 @@ static uart_dev_t g_uart3port =
 #    define CONSOLE_DEV         g_uart3port /* UART3 is console */
 #    define TTYS0_DEV           g_uart3port /* UART3 is ttyS0 */
 #    define UART3_ASSIGNED      1
+#elif defined(CONFIG_UART4_SERIAL_CONSOLE)
+#    define CONSOLE_DEV         g_uart4port /* UART4 is console */
+#    define TTYS0_DEV           g_uart4port /* UART4 is ttyS0 */
+#    define UART4_ASSIGNED      1
 #else
 #  undef CONSOLE_DEV                        /* No console */
 #  if defined(CONFIG_R528_UART0)
@@ -330,6 +371,9 @@ static uart_dev_t g_uart3port =
 #  elif defined(CONFIG_R528_UART3)
 #    define TTYS0_DEV           g_uart3port /* UART3 is ttyS0 */
 #    define UART3_ASSIGNED      1
+#  elif defined(CONFIG_R528_UART4)
+#    define TTYS0_DEV           g_uart4port /* UART4 is ttyS0 */
+#    define UART4_ASSIGNED      1
 #  endif
 #endif
 
@@ -347,6 +391,9 @@ static uart_dev_t g_uart3port =
 #elif defined(CONFIG_R528_UART3) && !defined(UART3_ASSIGNED)
 #  define TTYS1_DEV           g_uart3port /* UART3 is ttyS1 */
 #  define UART3_ASSIGNED      1
+#elif defined(CONFIG_R528_UART4) && !defined(UART4_ASSIGNED)
+#  define TTYS1_DEV           g_uart4port /* UART4 is ttyS1 */
+#  define UART4_ASSIGNED      1
 #endif
 
 /* Pick ttys2.  This could be one of UART1-7. It can't be UART0 because that
@@ -363,6 +410,9 @@ static uart_dev_t g_uart3port =
 #elif defined(CONFIG_R528_UART3) && !defined(UART3_ASSIGNED)
 #  define TTYS2_DEV           g_uart3port /* UART3 is ttyS2 */
 #  define UART3_ASSIGNED      1
+#elif defined(CONFIG_R528_UART4) && !defined(UART4_ASSIGNED)
+#  define TTYS2_DEV           g_uart4port /* UART4 is ttyS2 */
+#  define UART4_ASSIGNED      1
 #endif
 
 /* Pick ttys3. This could be one of UART2-7. It can't be UART0-1 because
@@ -376,6 +426,9 @@ static uart_dev_t g_uart3port =
 #elif defined(CONFIG_R528_UART3) && !defined(UART3_ASSIGNED)
 #  define TTYS3_DEV           g_uart3port /* UART3 is ttyS3 */
 #  define UART3_ASSIGNED      1
+#elif defined(CONFIG_R528_UART4) && !defined(UART4_ASSIGNED)
+#  define TTYS3_DEV           g_uart4port /* UART4 is ttyS3 */
+#  define UART4_ASSIGNED      1
 #endif
 
 /****************************************************************************
@@ -494,6 +547,10 @@ static inline void r528_uart0config(void)
 	#define UART0_TX		GPIOF(2)
 	#define UART0_RX		GPIOF(4)
 	#define UART0_GPIO_FUNCTION	(3)
+#elif defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+	#define UART0_TX		GPIOF(2)
+	#define UART0_RX		GPIOF(4)
+	#define UART0_GPIO_FUNCTION	(3)
 #else
 	#define UART0_TX		GPIOB(0)
 	#define UART0_RX		GPIOB(1)
@@ -555,6 +612,28 @@ static inline void r528_uart3config(void)
 #define UART3_GPIO_FUNCTION	(7)
   hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART3_TX, UART3_GPIO_FUNCTION);
   hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART3_RX, UART3_GPIO_FUNCTION);
+  leave_critical_section(flags);
+};
+#endif
+
+#ifdef CONFIG_R528_UART4
+static inline void r528_uart4config(void)
+{
+  irqstate_t flags;
+
+  flags = enter_critical_section();
+  sunxi_clock_init_uart(4);
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define UART4_TX		GPIOD(7)
+#define UART4_RX		GPIOD(8)
+#define UART4_GPIO_FUNCTION	(5)
+#else
+#define UART4_TX		GPIOD(10)
+#define UART4_RX		GPIOD(11)
+#define UART4_GPIO_FUNCTION	(5)
+#endif
+  hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART4_TX, UART4_GPIO_FUNCTION);
+  hal_gpio_pinmux_set_function_early(R528_GPIO_VADDR, UART4_RX, UART4_GPIO_FUNCTION);
   leave_critical_section(flags);
 };
 #endif
@@ -1288,6 +1367,10 @@ void up_earlyserialinit(void)
   r528_uart3config();
 #endif
 
+#if defined(CONFIG_R528_UART4)
+  r528_uart4config();
+#endif
+
 #ifdef CONSOLE_DEV
   CONSOLE_DEV.isconsole = true;
   up_setup(&CONSOLE_DEV);
@@ -1322,6 +1405,9 @@ void arm_serialinit(void)
 #endif
 #if defined(CONFIG_R528_UART3)
   (void)uart_register("/dev/uart3", &g_uart3port);
+#endif
+#if defined(CONFIG_R528_UART4)
+  (void)uart_register("/dev/uart4", &g_uart4port);
 #endif
 }
 
