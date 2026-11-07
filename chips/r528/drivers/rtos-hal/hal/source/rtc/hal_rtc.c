@@ -859,6 +859,23 @@ int hal_rtc_init(void)
     /*
     * Step1: select RTC clock source
     */
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+    /*
+     * EXT_LOSC_GSM is kept at its default value 0 (Low).
+     * R528 user manual, section 3.14.6.1, bit[3:2]: changing GSM makes the
+     * 32K oscillation circuit unstable, and with the auto switch enabled
+     * the 32K clock may fall back to the internal RC oscillator.
+     */
+    tmp_data = hal_readl(rtc_dev->base + SUNXI_LOSC_CTRL);
+    tmp_data &= ~(EXT_LOSC_GSM | RTC_SOURCE_EXTERNAL |
+                  REG_CLK32K_AUTO_SWT_BYPASS);
+    tmp_data |= REG_CLK32K_AUTO_SWT_EN;
+    hal_writel(tmp_data | REG_LOSCCTRL_MAGIC, rtc_dev->base + SUNXI_LOSC_CTRL);
+
+    tmp_data = hal_readl(rtc_dev->base + SUNXI_LOSC_CTRL);
+    tmp_data |= (RTC_SOURCE_EXTERNAL | REG_LOSCCTRL_MAGIC);
+    hal_writel(tmp_data, rtc_dev->base + SUNXI_LOSC_CTRL);
+#else
     tmp_data = hal_readl(rtc_dev->base + SUNXI_LOSC_CTRL);
     tmp_data |= (REG_CLK32K_AUTO_SWT_EN);
 
@@ -874,6 +891,7 @@ int hal_rtc_init(void)
     tmp_data = hal_readl(rtc_dev->base + SUNXI_LOSC_CTRL);
     tmp_data |= (EXT_LOSC_GSM | REG_LOSCCTRL_MAGIC);
     hal_writel(tmp_data, rtc_dev->base + SUNXI_LOSC_CTRL);
+#endif
 #else
     /* get clock source from */
     sunxi_rtc_clk_init();

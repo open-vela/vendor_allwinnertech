@@ -61,8 +61,13 @@ static pwm_gpio_t pwm_gpio[PWM_NUM] =
         .pwm_function = 4,
     },
     {
+#ifdef CONFIG_ARCH_BOARD_R528S3_MIBOX_X1
+        .pwm_pin = GPIO_PD19,
+        .pwm_function = 5,
+#else
         .pwm_pin = GPIO_PD4,
         .pwm_function = 3,
+#endif
     },
     {
         .pwm_pin = GPIO_PD20,

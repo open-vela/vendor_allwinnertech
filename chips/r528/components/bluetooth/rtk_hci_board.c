@@ -23,7 +23,11 @@
 #include "sunxi_secure_storage.h"
 #include "hal_mem.h"
 
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+#define BT_DIS_PIN_GPIO "/dev/gpio4"
+#else
 #define BT_DIS_PIN_GPIO "/dev/gpio2"
+#endif
 
 #define CONFIG_BTADDR "/etc/bt/8723fs_btaddr.txt"
 #ifndef PATCH_BIN_NAME

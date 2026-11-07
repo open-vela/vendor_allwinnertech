@@ -50,4 +50,17 @@ CHIP_CSRCS += $(SGP30_PATH)/sgp30_uorb.c
 CHIP_CSRCS += $(SGP30_PATH)/sgp30.c
 CFLAGS          += ${INCDIR_PREFIX}$(APPDIR)/system/uorb/
 endif
+
+ifeq ($(CONFIG_SENSORS_ICM20948), y)
+DRV_SOURCE_PATH=drivers/rtos-hal/hal/source
+ICM20948_PATH=drivers/rtos-hal/hal/source/sensor/icm20948
+DEPPATH+=--dep-path $(ICM20948_PATH)
+VPATH+=:chip/$(ICM20948_PATH)
+ARCH_GPIO_SRC_PATH:=$(ARCH_SRC)/chip/$(ICM20948_PATH)
+CFLAGS += ${INCDIR_PREFIX}$(ARCH_GPIO_SRC_PATH)
+CFLAGS += ${INCDIR_PREFIX}$(ARCH_GPIO_SRC_PATH)/soc
+CHIP_CSRCS += $(ICM20948_PATH)/icm20948.c
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/system/uorb/
+endif
+
 CFLAGS += -DCONFIG_DRIVERS_SENSORS

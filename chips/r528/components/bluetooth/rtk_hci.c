@@ -522,6 +522,9 @@ static int hci_load_firmware(FAR struct rtk_bt_priv_s *dev)
 
   while (rtkbt_board_fetch_command(command) != 0)
     {
+#if defined(CONFIG_ARCH_BOARD_R528S3_MIBOX_X1)
+      usleep(1000);
+#endif
       command[0] = HCI_COMMAND_PKT;
       command[1] = 0x20;
       command[2] = 0xfc;

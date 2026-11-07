@@ -9,6 +9,8 @@
 
 #define T070S140B_LCD_WIDTH         1024      /* LCD width in pixels */
 #define T070S140B_LCD_HEIGHT        600       /* LCD height in pixels */
+#define HD40007C30_LCD_WIDTH        480       /* LCD width in pixels */
+#define HD40007C30_LCD_HEIGHT       480       /* LCD height in pixels */
 
 /* GT911 I2C addresses (7-bit addresses) */
 #define GT911_I2C_ADDR_1            0x5D      /* 0xBA>>1 Primary I2C address  */

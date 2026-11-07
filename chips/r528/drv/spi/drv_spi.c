@@ -230,6 +230,30 @@ static struct sunxi_spi_priv_s sunxi_spi1_priv =
     .mode = SPIDEV_MODE0,  /* SPI Mode 0: CPOL=0, CPHA=0 */
     .nbits = 8,  /* 8-bit transfers for SSD1306 */
   };
+#elif defined(CONFIG_SENSORS_ICM20948)
+  static struct sunxi_spi_priv_s sunxi_spi1_priv =
+  {
+    .spi_dev =
+      {
+        .ops = &sunxi_spi_ops
+      },
+    .spim =
+      {
+        .port = 1,
+        .cfg =
+        {
+            .flash = 0,
+            .bit_order = HAL_SPI_MASTER_MSB_FIRST,
+            .clock_frequency = 5000000,
+            .cpha = HAL_SPI_MASTER_CLOCK_PHASE0,
+            .cpol = HAL_SPI_MASTER_CLOCK_PHASE0,
+            .slave_port = 0,
+        },
+      },
+    .refs  = 0,
+    .mode = SPIDEV_MODE0,
+    .nbits = 8,
+  };
 #else
   static struct sunxi_spi_priv_s sunxi_spi1_priv =
   {
