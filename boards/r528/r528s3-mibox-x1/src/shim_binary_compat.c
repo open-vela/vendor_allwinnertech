@@ -47,11 +47,13 @@ void bt_avrcp_cttg_register_cb(void *cb)
 {
   (void)cb;
 }
+
 int bt_avrcp_cttg_connect(void *conn)
 {
   (void)conn;
   return 0;
 }
+
 int bt_avrcp_cttg_disconnect(void *conn)
 {
   (void)conn;
@@ -65,16 +67,19 @@ int bt_avrcp_ct_pass_through_cmd(void *conn, int op_id, int state)
   (void)state;
   return 0;
 }
+
 int bt_avrcp_ct_get_play_status(void *conn)
 {
   (void)conn;
   return 0;
 }
+
 int bt_avrcp_ct_get_id3_info(void *conn)
 {
   (void)conn;
   return 0;
 }
+
 int bt_pts_avrcp_ct_get_capabilities(void *conn)
 {
   (void)conn;
