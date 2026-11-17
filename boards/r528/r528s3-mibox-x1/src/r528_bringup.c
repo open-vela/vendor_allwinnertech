@@ -13,7 +13,6 @@
  * COVERED UNDER ANY REQUIRED THIRD PARTY LICENSE.
  * YOU ARE SOLELY RESPONSIBLE FOR YOUR USAGE OF THIRD PARTY’S TECHNOLOGY.
 
-
  * THIS SOFTWARE IS PROVIDED BY ALLWINNER"AS IS" AND TO THE MAXIMUM EXTENT
  * PERMITTED BY LAW, ALLWINNER EXPRESSLY DISCLAIMS ALL WARRANTIES OF ANY KIND,
  * WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION REGARDING
@@ -68,6 +67,7 @@
  *     Called from the NSH library
  *
  ****************************************************************************/
+
 int r528_bringup(void)
 {
   int ret = OK;
@@ -84,11 +84,13 @@ int r528_bringup(void)
 
 #if defined(CONFIG_USERLED) && defined(CONFIG_USERLED_LOWER)
   /* Register the LED driver */
+
   extern int userled_lower_initialize(FAR const char *devname);
   ret = userled_lower_initialize("/dev/userleds");
-  if (ret < 0) {
-    syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
-  }
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
+    }
 #endif
 
   return ret;

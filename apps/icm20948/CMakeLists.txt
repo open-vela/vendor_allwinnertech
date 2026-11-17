@@ -19,9 +19,7 @@
 # ##############################################################################
 
 if(CONFIG_EXAMPLES_ICM20948)
-  # if(CONFIG_EXAMPLES_ICM20948_UORB)
-    set(CSRC icm20948_uorb_main.c)
-  # endif()
+  set(CSRC icm20948_uorb_main.c)
   nuttx_add_application(
     NAME
     ${CONFIG_EXAMPLES_ICM20948_PROGNAME}

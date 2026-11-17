@@ -6,8 +6,11 @@
 config EXAMPLES_ICM20948
 	bool "ICM20948 sensor example"
 	default n
+	depends on SENSORS_ICM20948 && UORB
 	---help---
-		Enable the ICM20948 sensor example
+		Enable the ICM20948 sensor example.  The example reads
+		accelerometer, gyroscope and magnetometer data through the
+		uORB interface.
 
 if EXAMPLES_ICM20948
 
@@ -25,11 +28,4 @@ config EXAMPLES_ICM20948_PRIORITY
 config EXAMPLES_ICM20948_STACKSIZE
 	int "ICM20948 stack size"
 	default 2048
-
-config EXAMPLES_ICM20948_UORB
-	bool "Use UORB interface"
-	default n
-	depends on UORB
-	---help---
-		Use UORB interface to access ICM20948 sensor data
 endif

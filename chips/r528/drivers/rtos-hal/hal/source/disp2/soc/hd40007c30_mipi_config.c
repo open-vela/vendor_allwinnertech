@@ -89,7 +89,7 @@ struct property_t g_lcd0_config[] = {
 		.name = "lcd_rb_swap",
 		.type = PROPERTY_INTGER,
 		.v.value = 0,
-	},	
+	},
 	{
 		.name = "lcd_pwm_used",
 		.type = PROPERTY_INTGER,
@@ -369,7 +369,7 @@ struct property_t g_lcd0_config[] = {
 		.name = "lcd_rb_swap",
 		.type = PROPERTY_INTGER,
 		.v.value = 0,
-	},	
+	},
 	{
 		.name = "lcd_pwm_used",
 		.type = PROPERTY_INTGER,
@@ -663,7 +663,7 @@ struct property_t g_lcd0_1_config[] = {
 		.name = "lcd_rb_swap",
 		.type = PROPERTY_INTGER,
 		.v.value = 0,
-	},	
+	},
 	{
 		.name = "lcd_pwm_used",
 		.type = PROPERTY_INTGER,

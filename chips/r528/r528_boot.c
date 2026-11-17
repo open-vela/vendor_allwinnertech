@@ -92,6 +92,7 @@
 
 #if defined(CONFIG_SPI_DRIVER)
 #include <nuttx/spi/spi.h>
+#include "drivers/rtos-hal/hal/source/sensor/icm20948/icm20948.h"
 #endif
 
 #ifdef CONFIG_WATCHDOG
@@ -962,7 +963,6 @@ extern struct spi_dev_s *sunxi_spibus_initialize(int port);
 #ifdef CONFIG_SENSORS_ICM20948
   {
     extern struct spi_dev_s *sunxi_spibus_initialize(int port);
-    extern int icm20948_register(int port, FAR struct spi_dev_s *spi);
     FAR struct spi_dev_s *spidev = sunxi_spibus_initialize(1);
 
     if (spidev)
