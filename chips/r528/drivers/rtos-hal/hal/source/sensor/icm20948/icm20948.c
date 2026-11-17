@@ -35,7 +35,9 @@
 #include <nuttx/compiler.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/sensors/sensor.h>
+#include <nuttx/spi/spi.h>
 #include <nuttx/wqueue.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -114,6 +116,11 @@
 #define ICM20948_DEFAULT_INTERVAL_US 1000000
 #define ICM20948_MIN_INTERVAL_US 50000
 #define ICM20948_MAX_INTERVAL_US 10000000
+
+#define ICM20948_SPI_CS         0
+
+#define ICM20948_DEG2RAD        0.017453292519943295f
+#define ICM20948_G2MPS2         9.80665f
 
 /****************************************************************************
  * Private Types
@@ -226,6 +233,8 @@ struct icm20948_dev_s
   FAR struct spi_dev_s *spi;
   int port;
 
+  struct rmutex_s bus;
+
   struct work_s acce_work;
   struct work_s gyro_work;
   struct work_s magn_work;
@@ -246,9 +255,6 @@ struct icm20948_dev_s
 static int icm20948_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                  FAR struct file *filep,
                                    FAR uint32_t *period_us);
-static int icm20948_fetch(FAR struct sensor_lowerhalf_s *lower,
-                          FAR struct file *filep, FAR char *buffer,
-                            size_t buflen);
 static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
                                   FAR struct file *filep, bool enable);
 static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
@@ -259,10 +265,11 @@ static void icm20948_acce_worker(FAR void *arg);
 static void icm20948_gyro_worker(FAR void *arg);
 static void icm20948_magn_worker(FAR void *arg);
 
-static int icm20948_spi_exchange(hal_spi_master_port_t port,
-                                 const void *txbuffer,
-                                 void *rxbuffer,
-                                 uint32_t nwords);
+static int icm20948_spi_exchange(FAR struct icm20948_dev_s *priv,
+                                 FAR const void *txbuffer,
+                                 FAR void *rxbuffer, size_t nwords);
+static void icm20948_bus_lock(FAR struct icm20948_dev_s *priv);
+static void icm20948_bus_unlock(FAR struct icm20948_dev_s *priv);
 static uint8_t icm20948_write_reg(FAR struct icm20948_dev_s *priv,
                                   uint8_t reg, uint8_t value);
 static uint8_t icm20948_write_regs(FAR struct icm20948_dev_s *priv,
@@ -273,7 +280,7 @@ static uint8_t icm20948_read_reg(FAR struct icm20948_dev_s *priv,
 static uint8_t icm20948_read_regs(FAR struct icm20948_dev_s *priv,
                                   uint8_t reg, uint8_t *value, uint8_t len);
 
-static uint8_t icm20948_init(FAR struct icm20948_dev_s *priv);
+static int icm20948_init(FAR struct icm20948_dev_s *priv);
 static uint8_t icm20948_wakeup(FAR struct icm20948_dev_s *priv);
 static uint8_t icm20948_sleep(FAR struct icm20948_dev_s *priv);
 static uint8_t icm20948_set_bank(FAR struct icm20948_dev_s *priv,
@@ -317,14 +324,13 @@ static uint8_t ak09916_read_reg(FAR struct icm20948_dev_s *priv, uint8_t reg,
 static uint8_t ak09916_read_regs(FAR struct icm20948_dev_s *priv,
                                  uint8_t reg,
                                  uint8_t *value, uint8_t len);
-static uint8_t ak09916_init(FAR struct icm20948_dev_s *priv);
+static int ak09916_init(FAR struct icm20948_dev_s *priv);
 
 static const struct sensor_ops_s g_icm20948_aac_ops =
   {
     .activate = icm20948_acce_activate,
     .set_interval = icm20948_set_interval,
     .batch = NULL,
-    .fetch = icm20948_fetch,
     .control = NULL,
   };
 
@@ -333,7 +339,6 @@ static const struct sensor_ops_s g_icm20948_gyr_ops =
     .activate = icm20948_gyro_activate,
     .set_interval = icm20948_set_interval,
     .batch = NULL,
-    .fetch = icm20948_fetch,
     .control = NULL,
   };
 
@@ -342,7 +347,6 @@ static const struct sensor_ops_s g_icm20948_mag_ops =
     .activate = icm20948_magn_activate,
     .set_interval = icm20948_set_interval,
     .batch = NULL,
-    .fetch = icm20948_fetch,
     .control = NULL,
   };
 
@@ -443,25 +447,29 @@ static int icm20948_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   return ret;
 }
 
-static int icm20948_spi_exchange(hal_spi_master_port_t port,
-                                 const void *txbuffer,
-                                 void *rxbuffer,
-                                 uint32_t nwords)
+static int icm20948_spi_exchange(FAR struct icm20948_dev_s *priv,
+                                 FAR const void *txbuffer,
+                                 FAR void *rxbuffer, size_t nwords)
 {
-  hal_spi_master_transfer_t tr;
+  SPI_EXCHANGE(priv->spi, txbuffer, rxbuffer, nwords);
 
-  memset(&tr, 0, sizeof(tr));
+  return OK;
+}
 
-  tr.tx_buf = (uint8_t *)txbuffer;
-  tr.rx_buf = rxbuffer;
-  tr.tx_len = nwords;
-  tr.rx_len = nwords;
-  tr.rx_nbits = SPI_NBITS_SINGLE;
-  tr.tx_nbits = SPI_NBITS_SINGLE;
-  tr.tx_single_len = nwords;
-  tr.dummy_byte = 0;
+static void icm20948_bus_lock(FAR struct icm20948_dev_s *priv)
+{
+  nxrmutex_lock(&priv->bus);
 
-  return hal_spi_xfer(port, &tr);
+  SPI_LOCK(priv->spi, true);
+  SPI_SELECT(priv->spi, ICM20948_SPI_CS, true);
+}
+
+static void icm20948_bus_unlock(FAR struct icm20948_dev_s *priv)
+{
+  SPI_SELECT(priv->spi, ICM20948_SPI_CS, false);
+  SPI_LOCK(priv->spi, false);
+
+  nxrmutex_unlock(&priv->bus);
 }
 
 static uint8_t icm20948_write_reg(FAR struct icm20948_dev_s *priv,
@@ -476,7 +484,7 @@ static uint8_t icm20948_write_reg(FAR struct icm20948_dev_s *priv,
 
   tx[1] = value;
 
-  return icm20948_spi_exchange(priv->port, tx, rx, 2);
+  return icm20948_spi_exchange(priv, tx, rx, 2);
 }
 
 static uint8_t icm20948_write_regs(FAR struct icm20948_dev_s *priv,
@@ -489,7 +497,7 @@ static uint8_t icm20948_write_regs(FAR struct icm20948_dev_s *priv,
 
   memcpy(&tx[1], value, len);
 
-  return icm20948_spi_exchange(priv->port, tx, rx, len + 1);
+  return icm20948_spi_exchange(priv, tx, rx, len + 1);
 }
 
 static uint8_t icm20948_read_reg(FAR struct icm20948_dev_s *priv,
@@ -505,7 +513,7 @@ static uint8_t icm20948_read_reg(FAR struct icm20948_dev_s *priv,
 
   tx[1] = 0x00;
 
-  int ret = icm20948_spi_exchange(priv->port, tx, rx, 2);
+  int ret = icm20948_spi_exchange(priv, tx, rx, 2);
 
   *value = rx[1];
 
@@ -524,14 +532,14 @@ static uint8_t icm20948_read_regs(FAR struct icm20948_dev_s *priv,
 
   memset(&tx[1], 0x00, len);
 
-  int ret = icm20948_spi_exchange(priv->port, tx, rx, len + 1);
+  int ret = icm20948_spi_exchange(priv, tx, rx, len + 1);
 
   memcpy(value, &rx[1], len);
 
   return ret;
 }
 
-static uint8_t icm20948_reset(FAR struct icm20948_dev_s *priv)
+static uint8_t icm20948_reset_locked(FAR struct icm20948_dev_s *priv)
 {
   uint8_t ret;
   uint8_t tmp;
@@ -550,7 +558,18 @@ static uint8_t icm20948_reset(FAR struct icm20948_dev_s *priv)
   return OK;
 }
 
-static uint8_t icm20948_wakeup(FAR struct icm20948_dev_s *priv)
+static uint8_t icm20948_reset(FAR struct icm20948_dev_s *priv)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_reset_locked(priv);
+  icm20948_bus_unlock(priv);
+
+  return ret;
+}
+
+static uint8_t icm20948_wakeup_locked(FAR struct icm20948_dev_s *priv)
 {
   uint8_t ret;
   uint8_t tmp;
@@ -570,7 +589,18 @@ static uint8_t icm20948_wakeup(FAR struct icm20948_dev_s *priv)
   return OK;
 }
 
-static uint8_t icm20948_sleep(FAR struct icm20948_dev_s *priv)
+static uint8_t icm20948_wakeup(FAR struct icm20948_dev_s *priv)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_wakeup_locked(priv);
+  icm20948_bus_unlock(priv);
+
+  return ret;
+}
+
+static uint8_t icm20948_sleep_locked(FAR struct icm20948_dev_s *priv)
 {
   uint8_t ret;
   uint8_t tmp;
@@ -587,6 +617,17 @@ static uint8_t icm20948_sleep(FAR struct icm20948_dev_s *priv)
       return -1;
     }
   return OK;
+}
+
+static uint8_t icm20948_sleep(FAR struct icm20948_dev_s *priv)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_sleep_locked(priv);
+  icm20948_bus_unlock(priv);
+
+  return ret;
 }
 
 static uint8_t icm20948_set_bank(FAR struct icm20948_dev_s *priv,
@@ -727,7 +768,7 @@ static uint8_t icm20948_get_raw_gyro(FAR struct icm20948_dev_s *priv,
   return OK;
 }
 
-static uint8_t icm20948_get_gyro(FAR struct icm20948_dev_s *priv,
+static uint8_t icm20948_get_gyro_locked(FAR struct icm20948_dev_s *priv,
                                  icm20948_gyro_value_t *gyro_value)
 {
   uint8_t ret;
@@ -752,11 +793,26 @@ static uint8_t icm20948_get_gyro(FAR struct icm20948_dev_s *priv,
       return -1;
     }
 
-  gyro_value->gyro_x = raw_gyro.raw_gyro_x / gyro_sensitivity;
-  gyro_value->gyro_y = raw_gyro.raw_gyro_y / gyro_sensitivity;
-  gyro_value->gyro_z = raw_gyro.raw_gyro_z / gyro_sensitivity;
+  gyro_value->gyro_x = raw_gyro.raw_gyro_x / gyro_sensitivity *
+                       ICM20948_DEG2RAD;
+  gyro_value->gyro_y = raw_gyro.raw_gyro_y / gyro_sensitivity *
+                       ICM20948_DEG2RAD;
+  gyro_value->gyro_z = raw_gyro.raw_gyro_z / gyro_sensitivity *
+                       ICM20948_DEG2RAD;
 
   return OK;
+}
+
+static uint8_t icm20948_get_gyro(FAR struct icm20948_dev_s *priv,
+                                 icm20948_gyro_value_t *gyro_value)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_get_gyro_locked(priv, gyro_value);
+  icm20948_bus_unlock(priv);
+
+  return ret;
 }
 
 static uint8_t icm20948_set_acce_fs(FAR struct icm20948_dev_s *priv,
@@ -869,7 +925,7 @@ static uint8_t icm20948_get_raw_acce(FAR struct icm20948_dev_s *priv,
   return OK;
 }
 
-static uint8_t icm20948_get_acce(FAR struct icm20948_dev_s *priv,
+static uint8_t icm20948_get_acce_locked(FAR struct icm20948_dev_s *priv,
                                  icm20948_acce_value_t *acce_value)
 {
   uint8_t ret;
@@ -894,13 +950,28 @@ static uint8_t icm20948_get_acce(FAR struct icm20948_dev_s *priv,
       return -1;
     }
 
-  acce_value->acce_x = raw_acce.raw_acce_x / acce_sensitivity;
-  acce_value->acce_y = raw_acce.raw_acce_y / acce_sensitivity;
-  acce_value->acce_z = raw_acce.raw_acce_z / acce_sensitivity;
+  acce_value->acce_x = raw_acce.raw_acce_x / acce_sensitivity *
+                       ICM20948_G2MPS2;
+  acce_value->acce_y = raw_acce.raw_acce_y / acce_sensitivity *
+                       ICM20948_G2MPS2;
+  acce_value->acce_z = raw_acce.raw_acce_z / acce_sensitivity *
+                       ICM20948_G2MPS2;
   return OK;
 }
 
-static uint8_t icm20948_get_magn(FAR struct icm20948_dev_s *priv,
+static uint8_t icm20948_get_acce(FAR struct icm20948_dev_s *priv,
+                                 icm20948_acce_value_t *acce_value)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_get_acce_locked(priv, acce_value);
+  icm20948_bus_unlock(priv);
+
+  return ret;
+}
+
+static uint8_t icm20948_get_magn_locked(FAR struct icm20948_dev_s *priv,
                                  icm20948_magn_value_t *magn_value)
 {
   uint8_t ret;
@@ -929,8 +1000,21 @@ static uint8_t icm20948_get_magn(FAR struct icm20948_dev_s *priv,
   return OK;
 }
 
-static uint8_t icm20948_get_temperature(FAR struct icm20948_dev_s *priv,
-                                        float *temperature)
+static uint8_t icm20948_get_magn(FAR struct icm20948_dev_s *priv,
+                                 icm20948_magn_value_t *magn_value)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_get_magn_locked(priv, magn_value);
+  icm20948_bus_unlock(priv);
+
+  return ret;
+}
+
+static uint8_t
+icm20948_get_temperature_locked(FAR struct icm20948_dev_s *priv,
+                                float *temperature)
 {
   uint8_t ret;
   uint8_t data_rd[2];
@@ -955,7 +1039,19 @@ static uint8_t icm20948_get_temperature(FAR struct icm20948_dev_s *priv,
   return OK;
 }
 
-static uint8_t icm20948_init(FAR struct icm20948_dev_s *priv)
+static uint8_t icm20948_get_temperature(FAR struct icm20948_dev_s *priv,
+                                        float *temperature)
+{
+  uint8_t ret;
+
+  icm20948_bus_lock(priv);
+  ret = icm20948_get_temperature_locked(priv, temperature);
+  icm20948_bus_unlock(priv);
+
+  return ret;
+}
+
+static int icm20948_init(FAR struct icm20948_dev_s *priv)
 {
   uint8_t ret;
   uint8_t id;
@@ -1070,110 +1166,13 @@ static int icm20948_set_interval(FAR struct sensor_lowerhalf_s *lower,
   return OK;
 }
 
-static int icm20948_fetch(FAR struct sensor_lowerhalf_s *lower,
-                          FAR struct file *filep, FAR char *buffer,
-                            size_t buflen)
-{
-  FAR struct icm20948_sensor_s *sensor =
-    container_of(lower, struct icm20948_sensor_s, lower);
-  FAR struct icm20948_dev_s *priv = sensor->dev;
-  int ret;
-  uint64_t timestamp;
-  int len;
-
-  if (!buffer || buflen == 0)
-    {
-      return -EINVAL;
-    }
-
-  float temperature;
-  ret = icm20948_get_temperature(priv, &temperature);
-  if (ret)
-    {
-      return -1;
-    }
-
-  timestamp = sensor_get_timestamp();
-
-  if (sensor->type == ICM20948_SENSOR_ACCE)
-    {
-      len = sizeof(struct sensor_accel);
-      if (buflen < len)
-        {
-          return -ENOMEM;
-        }
-
-      icm20948_acce_value_t acce;
-      ret = icm20948_get_acce(priv, &acce);
-      if (ret)
-        {
-          return -1;
-        }
-
-      struct sensor_accel *acce_data = (struct sensor_accel *)buffer;
-      acce_data->timestamp = timestamp;
-      acce_data->x = acce.acce_x;
-      acce_data->y = acce.acce_y;
-      acce_data->z = acce.acce_z;
-      acce_data->z = acce.acce_z;
-      acce_data->temperature = temperature;
-      acce_data->status = 0;
-    }
-  else if (sensor->type == ICM20948_SENSOR_GYRO)
-    {
-      len = sizeof(struct sensor_gyro);
-      if (buflen < len)
-        {
-          return -ENOMEM;
-        }
-
-      icm20948_gyro_value_t gyro;
-      ret = icm20948_get_gyro(priv, &gyro);
-      if (ret)
-        {
-          return -1;
-        }
-
-      struct sensor_gyro *gyro_data = (struct sensor_gyro *)buffer;
-      gyro_data->timestamp = timestamp;
-      gyro_data->x = gyro.gyro_x;
-      gyro_data->y = gyro.gyro_y;
-      gyro_data->z = gyro.gyro_z;
-      gyro_data->temperature = temperature;
-      gyro_data->status = 0;
-    }
-  else
-    {
-      len = sizeof(struct sensor_mag);
-      if (buflen < len)
-        {
-          return -ENOMEM;
-        }
-
-      icm20948_magn_value_t magn;
-      ret = icm20948_get_magn(priv, &magn);
-      if (ret)
-        {
-          return -1;
-        }
-
-      struct sensor_mag *magn_data = (struct sensor_mag *)buffer;
-      magn_data->timestamp = timestamp;
-      magn_data->x = magn.magn_x;
-      magn_data->y = magn.magn_y;
-      magn_data->z = magn.magn_z;
-      magn_data->temperature = temperature;
-      magn_data->status = 0;
-    }
-  return len;
-}
-
 static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
                                   FAR struct file *filep, bool enable)
 {
   FAR struct icm20948_sensor_s *sensor =
     container_of(lower, struct icm20948_sensor_s, lower);
   FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
 
   if (enable)
     {
@@ -1182,7 +1181,13 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
           return OK;
         }
 
-      int ret = icm20948_wakeup(priv);
+      ret = icm20948_wakeup(priv);
+      if (ret != OK)
+        {
+          syslog(LOG_ERR, "icm20948_wakeup error.\n");
+          return -EIO;
+        }
+
       priv->acce_enabled = true;
 
       if (!priv->acce_work_started)
@@ -1197,6 +1202,7 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
               return ret;
             }
         }
+
       g_acce_last_enable_time = sensor_get_timestamp();
     }
   else
@@ -1206,14 +1212,15 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
       if (g_acce_last_enable_time > 0 &&
           (current_time - g_acce_last_enable_time) < 500000)
         {
-          sninfo("ICM20948: Ignoring early disable (time: %llu us)\n",
+          sninfo("ICM20948: Early disable (time: %llu us)\n",
                  current_time - g_acce_last_enable_time);
-          return OK;
         }
+
       priv->acce_enabled = false;
       priv->acce_work_started = false;
       work_cancel(HPWORK, &priv->acce_work);
     }
+
   return OK;
 }
 
@@ -1223,6 +1230,7 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
   FAR struct icm20948_sensor_s *sensor =
     container_of(lower, struct icm20948_sensor_s, lower);
   FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
 
   if (enable)
     {
@@ -1231,7 +1239,13 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
           return OK;
         }
 
-      int ret = icm20948_wakeup(priv);
+      ret = icm20948_wakeup(priv);
+      if (ret != OK)
+        {
+          syslog(LOG_ERR, "icm20948_wakeup error.\n");
+          return -EIO;
+        }
+
       priv->gyro_enabled = true;
 
       if (!priv->gyro_work_started)
@@ -1246,6 +1260,7 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
               return ret;
             }
         }
+
       g_gyro_last_enable_time = sensor_get_timestamp();
     }
   else
@@ -1255,14 +1270,15 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
       if (g_gyro_last_enable_time > 0 &&
           (current_time - g_gyro_last_enable_time) < 500000)
         {
-          sninfo("ICM20948: Ignoring early disable (time: %llu us)\n",
+          sninfo("ICM20948: Early disable (time: %llu us)\n",
                  current_time - g_gyro_last_enable_time);
-          return OK;
         }
+
       priv->gyro_enabled = false;
       priv->gyro_work_started = false;
       work_cancel(HPWORK, &priv->gyro_work);
     }
+
   return OK;
 }
 
@@ -1272,6 +1288,7 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
   FAR struct icm20948_sensor_s *sensor =
     container_of(lower, struct icm20948_sensor_s, lower);
   FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
 
   if (enable)
     {
@@ -1280,7 +1297,13 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
           return OK;
         }
 
-      int ret = icm20948_wakeup(priv);
+      ret = icm20948_wakeup(priv);
+      if (ret != OK)
+        {
+          syslog(LOG_ERR, "icm20948_wakeup error.\n");
+          return -EIO;
+        }
+
       priv->magn_enabled = true;
 
       if (!priv->magn_work_started)
@@ -1295,6 +1318,7 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
               return ret;
             }
         }
+
       g_magn_last_enable_time = sensor_get_timestamp();
     }
   else
@@ -1304,21 +1328,25 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
       if (g_magn_last_enable_time > 0 &&
           (current_time - g_magn_last_enable_time) < 500000)
         {
-          sninfo("ICM20948: Ignoring early disable (time: %llu us)\n",
+          sninfo("ICM20948: Early disable (time: %llu us)\n",
                  current_time - g_magn_last_enable_time);
-          return OK;
         }
+
       priv->magn_enabled = false;
       priv->magn_work_started = false;
       work_cancel(HPWORK, &priv->magn_work);
     }
+
   return OK;
 }
 
 static void icm20948_acce_worker(FAR void *arg)
 {
   FAR struct icm20948_dev_s *priv = (FAR struct icm20948_dev_s *)arg;
-  struct sensor_accel data;
+  struct sensor_accel data =
+  {
+    0
+  };
 
   if (priv == NULL || !priv->acce_work_started || !priv->acce_enabled)
     {
@@ -1374,7 +1402,10 @@ static void icm20948_acce_worker(FAR void *arg)
 static void icm20948_gyro_worker(FAR void *arg)
 {
   FAR struct icm20948_dev_s *priv = (FAR struct icm20948_dev_s *)arg;
-  struct sensor_gyro data;
+  struct sensor_gyro data =
+  {
+    0
+  };
 
   if (priv == NULL || !priv->gyro_work_started || !priv->gyro_enabled)
     {
@@ -1430,7 +1461,10 @@ static void icm20948_gyro_worker(FAR void *arg)
 static void icm20948_magn_worker(FAR void *arg)
 {
   FAR struct icm20948_dev_s *priv = (FAR struct icm20948_dev_s *)arg;
-  struct sensor_mag data;
+  struct sensor_mag data =
+  {
+    0
+  };
 
   if (priv == NULL || !priv->magn_work_started || !priv->magn_enabled)
     {
@@ -1614,7 +1648,7 @@ static uint8_t ak09916_read_regs(FAR struct icm20948_dev_s *priv,
   return OK;
 }
 
-static uint8_t ak09916_init(FAR struct icm20948_dev_s *priv)
+static int ak09916_init(FAR struct icm20948_dev_s *priv)
 {
   uint8_t ret;
   uint8_t tmp = 0;
@@ -1671,6 +1705,12 @@ static uint8_t ak09916_init(FAR struct icm20948_dev_s *priv)
   syslog(LOG_INFO, "===============AK09916  ID: 0x%02X===============\n",
          tmp);
 
+  if (tmp != AK09916_ID_VALUE)
+    {
+      syslog(LOG_ERR, "AK09916 not found, ID: 0x%02X\n", tmp);
+      return -ENODEV;
+    }
+
   ret = ak09916_write_reg(priv, AK09916_CNTL_3, 0x01);
   if (ret)
     {
@@ -1710,6 +1750,8 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   priv->spi = spi;
   priv->port = port;
 
+  nxrmutex_init(&priv->bus);
+
   priv->acce_work_started = false;
   priv->gyro_work_started = false;
   priv->magn_work_started = false;
@@ -1723,6 +1765,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = icm20948_init(priv);
   if (ret < 0)
     {
+      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1730,6 +1773,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = ak09916_init(priv);
   if (ret < 0)
     {
+      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1744,6 +1788,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = sensor_register(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
   if (ret < 0)
     {
+      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1759,6 +1804,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   if (ret < 0)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
+      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1776,6 +1822,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_GYRO].lower, port);
+      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
