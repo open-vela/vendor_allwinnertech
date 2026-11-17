@@ -35,7 +35,6 @@
 #include <nuttx/compiler.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
-#include <nuttx/mutex.h>
 #include <nuttx/sensors/sensor.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/wqueue.h>
@@ -232,8 +231,6 @@ struct icm20948_dev_s
 
   FAR struct spi_dev_s *spi;
   int port;
-
-  struct rmutex_s bus;
 
   struct work_s acce_work;
   struct work_s gyro_work;
@@ -458,8 +455,6 @@ static int icm20948_spi_exchange(FAR struct icm20948_dev_s *priv,
 
 static void icm20948_bus_lock(FAR struct icm20948_dev_s *priv)
 {
-  nxrmutex_lock(&priv->bus);
-
   SPI_LOCK(priv->spi, true);
   SPI_SELECT(priv->spi, ICM20948_SPI_CS, true);
 }
@@ -468,8 +463,6 @@ static void icm20948_bus_unlock(FAR struct icm20948_dev_s *priv)
 {
   SPI_SELECT(priv->spi, ICM20948_SPI_CS, false);
   SPI_LOCK(priv->spi, false);
-
-  nxrmutex_unlock(&priv->bus);
 }
 
 static uint8_t icm20948_write_reg(FAR struct icm20948_dev_s *priv,
@@ -628,6 +621,22 @@ static uint8_t icm20948_sleep(FAR struct icm20948_dev_s *priv)
   icm20948_bus_unlock(priv);
 
   return ret;
+}
+
+static void icm20948_sleep_if_idle(FAR struct icm20948_dev_s *priv)
+{
+  uint8_t ret;
+
+  if (priv->acce_enabled || priv->gyro_enabled || priv->magn_enabled)
+    {
+      return;
+    }
+
+  ret = icm20948_sleep(priv);
+  if (ret != OK)
+    {
+      syslog(LOG_ERR, "icm20948_sleep error.\n");
+    }
 }
 
 static uint8_t icm20948_set_bank(FAR struct icm20948_dev_s *priv,
@@ -1219,6 +1228,8 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
       priv->acce_enabled = false;
       priv->acce_work_started = false;
       work_cancel(HPWORK, &priv->acce_work);
+
+      icm20948_sleep_if_idle(priv);
     }
 
   return OK;
@@ -1277,6 +1288,8 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
       priv->gyro_enabled = false;
       priv->gyro_work_started = false;
       work_cancel(HPWORK, &priv->gyro_work);
+
+      icm20948_sleep_if_idle(priv);
     }
 
   return OK;
@@ -1335,6 +1348,8 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
       priv->magn_enabled = false;
       priv->magn_work_started = false;
       work_cancel(HPWORK, &priv->magn_work);
+
+      icm20948_sleep_if_idle(priv);
     }
 
   return OK;
@@ -1750,8 +1765,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   priv->spi = spi;
   priv->port = port;
 
-  nxrmutex_init(&priv->bus);
-
   priv->acce_work_started = false;
   priv->gyro_work_started = false;
   priv->magn_work_started = false;
@@ -1765,7 +1778,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = icm20948_init(priv);
   if (ret < 0)
     {
-      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1773,7 +1785,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = ak09916_init(priv);
   if (ret < 0)
     {
-      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1788,7 +1799,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = sensor_register(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
   if (ret < 0)
     {
-      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1804,7 +1814,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   if (ret < 0)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
-      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }
@@ -1822,7 +1831,6 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_GYRO].lower, port);
-      nxrmutex_destroy(&priv->bus);
       kmm_free(priv);
       return ret;
     }

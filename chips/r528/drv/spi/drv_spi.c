@@ -77,6 +77,8 @@ struct sunxi_spi_priv_s
   uint32_t actual;
   uint8_t nbits;
   int refs;
+
+  struct rmutex_s lock;
 };
 
 /****************************************************************************
@@ -285,7 +287,14 @@ static struct sunxi_spi_priv_s sunxi_spi1_priv =
 
 static int sunxi_spi_lock(struct spi_dev_s *dev, bool lock)
 {
-  return OK;
+  struct sunxi_spi_priv_s *priv = (struct sunxi_spi_priv_s *)dev;
+
+  if (lock)
+    {
+      return nxrmutex_lock(&priv->lock);
+    }
+
+  return nxrmutex_unlock(&priv->lock);
 }
 
 static void sunxi_spi_select(struct spi_dev_s *dev,
@@ -396,7 +405,9 @@ static void sunxi_spi_exchange(struct spi_dev_s *dev,
 	tr.rx_buf = rxbuffer;
 	tr.tx_len = nwords;
 	tr.rx_len = nwords;
-    tr.rx_nbits = tr.tx_nbits = priv->nbits;
+    tr.tx_nbits = SPI_NBITS_SINGLE;
+    tr.rx_nbits = SPI_NBITS_SINGLE;
+    tr.bits_per_word = priv->nbits;
 	tr.tx_single_len = nwords;
 	tr.dummy_byte = 0;
 
@@ -467,6 +478,8 @@ struct spi_dev_s *sunxi_spibus_initialize(int port)
       return spi_dev;
     }
 
+  nxrmutex_init(&priv->lock);
+
   sunxi_spi_init(spi_dev);
   priv->refs++;
 
@@ -493,6 +506,8 @@ int sunxi_spibus_uninitialize(struct spi_dev_s *dev)
     {
       return OK;
     }
+
+  nxrmutex_destroy(&priv->lock);
 
   sunxi_spi_deinit(dev);
 
