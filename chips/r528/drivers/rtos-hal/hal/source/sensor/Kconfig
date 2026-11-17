@@ -33,6 +33,8 @@ config SENSORS_ICM20948
     bool "ICM20948 9-axis Sensor"
     default n
     depends on SPI
+    depends on SENSORS
+    select SCHED_HPWORK
     ---help---
         Enable support for the ICM20948 9-axis sensor driver.
 
