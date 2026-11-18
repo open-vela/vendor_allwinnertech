@@ -35,6 +35,7 @@
 #include <nuttx/compiler.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/sensors/sensor.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/wqueue.h>
@@ -231,6 +232,8 @@ struct icm20948_dev_s
 
   FAR struct spi_dev_s *spi;
   int port;
+
+  mutex_t statelock;
 
   struct work_s acce_work;
   struct work_s gyro_work;
@@ -1175,12 +1178,9 @@ static int icm20948_set_interval(FAR struct sensor_lowerhalf_s *lower,
   return OK;
 }
 
-static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
-                                  FAR struct file *filep, bool enable)
+static int icm20948_acce_activate_locked(FAR struct icm20948_dev_s *priv,
+                                        bool enable)
 {
-  FAR struct icm20948_sensor_s *sensor =
-    container_of(lower, struct icm20948_sensor_s, lower);
-  FAR struct icm20948_dev_s *priv = sensor->dev;
   int ret;
 
   if (enable)
@@ -1227,7 +1227,7 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
 
       priv->acce_enabled = false;
       priv->acce_work_started = false;
-      work_cancel(HPWORK, &priv->acce_work);
+      work_cancel_sync(HPWORK, &priv->acce_work);
 
       icm20948_sleep_if_idle(priv);
     }
@@ -1235,12 +1235,26 @@ static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
   return OK;
 }
 
-static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
+static int icm20948_acce_activate(FAR struct sensor_lowerhalf_s *lower,
                                   FAR struct file *filep, bool enable)
 {
   FAR struct icm20948_sensor_s *sensor =
     container_of(lower, struct icm20948_sensor_s, lower);
   FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
+
+  nxmutex_lock(&priv->statelock);
+
+  ret = icm20948_acce_activate_locked(priv, enable);
+
+  nxmutex_unlock(&priv->statelock);
+
+  return ret;
+}
+
+static int icm20948_gyro_activate_locked(FAR struct icm20948_dev_s *priv,
+                                        bool enable)
+{
   int ret;
 
   if (enable)
@@ -1287,7 +1301,7 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
 
       priv->gyro_enabled = false;
       priv->gyro_work_started = false;
-      work_cancel(HPWORK, &priv->gyro_work);
+      work_cancel_sync(HPWORK, &priv->gyro_work);
 
       icm20948_sleep_if_idle(priv);
     }
@@ -1295,12 +1309,26 @@ static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
   return OK;
 }
 
-static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
+static int icm20948_gyro_activate(FAR struct sensor_lowerhalf_s *lower,
                                   FAR struct file *filep, bool enable)
 {
   FAR struct icm20948_sensor_s *sensor =
     container_of(lower, struct icm20948_sensor_s, lower);
   FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
+
+  nxmutex_lock(&priv->statelock);
+
+  ret = icm20948_gyro_activate_locked(priv, enable);
+
+  nxmutex_unlock(&priv->statelock);
+
+  return ret;
+}
+
+static int icm20948_magn_activate_locked(FAR struct icm20948_dev_s *priv,
+                                        bool enable)
+{
   int ret;
 
   if (enable)
@@ -1347,12 +1375,29 @@ static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
 
       priv->magn_enabled = false;
       priv->magn_work_started = false;
-      work_cancel(HPWORK, &priv->magn_work);
+      work_cancel_sync(HPWORK, &priv->magn_work);
 
       icm20948_sleep_if_idle(priv);
     }
 
   return OK;
+}
+
+static int icm20948_magn_activate(FAR struct sensor_lowerhalf_s *lower,
+                                  FAR struct file *filep, bool enable)
+{
+  FAR struct icm20948_sensor_s *sensor =
+    container_of(lower, struct icm20948_sensor_s, lower);
+  FAR struct icm20948_dev_s *priv = sensor->dev;
+  int ret;
+
+  nxmutex_lock(&priv->statelock);
+
+  ret = icm20948_magn_activate_locked(priv, enable);
+
+  nxmutex_unlock(&priv->statelock);
+
+  return ret;
 }
 
 static void icm20948_acce_worker(FAR void *arg)
@@ -1765,6 +1810,8 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   priv->spi = spi;
   priv->port = port;
 
+  nxmutex_init(&priv->statelock);
+
   priv->acce_work_started = false;
   priv->gyro_work_started = false;
   priv->magn_work_started = false;
@@ -1778,6 +1825,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = icm20948_init(priv);
   if (ret < 0)
     {
+      nxmutex_destroy(&priv->statelock);
       kmm_free(priv);
       return ret;
     }
@@ -1785,6 +1833,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = ak09916_init(priv);
   if (ret < 0)
     {
+      nxmutex_destroy(&priv->statelock);
       kmm_free(priv);
       return ret;
     }
@@ -1799,6 +1848,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   ret = sensor_register(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
   if (ret < 0)
     {
+      nxmutex_destroy(&priv->statelock);
       kmm_free(priv);
       return ret;
     }
@@ -1814,6 +1864,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
   if (ret < 0)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
+      nxmutex_destroy(&priv->statelock);
       kmm_free(priv);
       return ret;
     }
@@ -1831,6 +1882,7 @@ int icm20948_register(int port, FAR struct spi_dev_s *spi)
     {
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_ACCE].lower, port);
       sensor_unregister(&priv->sensors[ICM20948_SENSOR_GYRO].lower, port);
+      nxmutex_destroy(&priv->statelock);
       kmm_free(priv);
       return ret;
     }
