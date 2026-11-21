@@ -56,6 +56,8 @@ ifeq ($(CONFIG_ETC_ROMFS),y)
   RCRAWS += etc/build.prop
   RCRAWS += etc/factory.sh
  # RCRAWS += etc/rsa_public_key.pem
+  # CA root bundle for TLS peer verification (curl/mbedTLS CApath=/etc/ssl/certs)
+  RCRAWS += etc/ssl/certs
 ifeq ($(CONFIG_X4B_AP),y)
   RCRAWS += etc/EQ_AD51652.conf
   RCRAWS += etc/EQ_ACM.conf
