@@ -222,6 +222,12 @@ config LCD_SUPPORT_T070S140B
     default n
     ---help---
       If you want to Support  T070S140B mipi 1024x600  panel for display driver, select it.
+config LCD_SUPPORT_BOE_1200X1920
+    bool "LCD support BOE 1200x1920 panel"
+	select FB_UPDATE
+    default n
+    ---help---
+      If you want to Support  BOE_1200x1920 mipi 1200x1920 panel for display driver, select it.
 config LCD_SUPPORT_SSD1306
     bool "LCD support SSD1306 panel"
     default n

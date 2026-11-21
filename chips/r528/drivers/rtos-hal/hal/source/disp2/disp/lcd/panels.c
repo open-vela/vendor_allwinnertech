@@ -146,6 +146,10 @@ struct __lcd_panel *panel_array[] = {
 	&b080uan01_panel,
 #endif
 
+#ifdef CONFIG_LCD_SUPPORT_BOE_1200X1920
+	&BOE_1200x1920_panel,
+#endif
+
 	NULL,
 };
 

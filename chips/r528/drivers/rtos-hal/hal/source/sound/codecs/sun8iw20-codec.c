@@ -1074,13 +1074,10 @@ static int sunxi_codec_dapm_control(struct snd_pcm_substream *substream,
 				return -EINVAL;
 			}
 
-			if ((param->adc1_flag & ADC_AUDIO_ROUTE_MIC) ||
-				(param->adc2_flag & ADC_AUDIO_ROUTE_MIC) ||
-				(param->adc3_flag & ADC_AUDIO_ROUTE_MIC)) {
-				snd_codec_update_bits(codec, SUNXI_MICBIAS_REG,
-						      0x1<<MMICBIASEN,
-						      0x0<<MMICBIASEN);
-			}
+			/* 2026-09-11 pop 修复（对齐 P140 DAC 关断顺序）：原顺序在此处
+			 * 先断 MICBIAS，随后才关 ADC——偏置已失而 ADC 仍在采样，
+			 * 输入瞬跳产生"麦克风关闭 POP/CLICK"。改为先关 ADC 通路、
+			 * 延时后再断 MICBIAS（见本分支末尾）。 */
 
 			if (param->adc1_flag == ADC_AUDIO_ROUTE_MIC) {
 				snd_codec_update_bits(codec, SUNXI_ADC1_ANA_CTL,
@@ -1126,6 +1123,16 @@ static int sunxi_codec_dapm_control(struct snd_pcm_substream *substream,
 				snd_codec_update_bits(codec, SUNXI_ADC3_ANA_CTL,
 						      0x1<<ADC_EN,
 						      0x0<<ADC_EN);
+			}
+			/* 2026-09-11 pop 修复（P140 同款思路）：ADC 通路已关，
+			 * 等模拟输出归零后再断 MICBIAS 与数字 ADC，避免采样瞬跳。 */
+			hal_msleep(5);
+			if ((param->adc1_flag & ADC_AUDIO_ROUTE_MIC) ||
+				(param->adc2_flag & ADC_AUDIO_ROUTE_MIC) ||
+				(param->adc3_flag & ADC_AUDIO_ROUTE_MIC)) {
+				snd_codec_update_bits(codec, SUNXI_MICBIAS_REG,
+						      0x1<<MMICBIASEN,
+						      0x0<<MMICBIASEN);
 			}
 			/* digital ADC enable */
 			snd_codec_update_bits(codec, SUNXI_ADC_FIFOC,

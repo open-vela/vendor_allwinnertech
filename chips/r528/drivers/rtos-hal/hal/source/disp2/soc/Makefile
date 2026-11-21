@@ -13,6 +13,7 @@ obj-$(CONFIG_VVX07H005A10_MIPI) += VVX07H005A10_mipi_config.o
 obj-$(CONFIG_HE0801A068_MIPI)+= he0801a068_mipi_config.o
 obj-$(CONFIG_GC9503CV_MIPI) += gc9503cv_mipi_config.o
 obj-$(CONFIG_T070S140B_MIPI) += t070s140b_mipi_config.o
+obj-$(CONFIG_BOE_1200X1920_MIPI) += BOE_1200x1920_mipi_config.o
 obj-$(CONFIG_SSD1306_SPI) += ssd1306_spi_config.o
 obj-$(CONFIG_DEFAULT_LVDS)+= f133_lvds.o
 obj-$(CONFIG_LCD_SUPPORT_ILI9341)+= ili9341_lcd_spi.o
