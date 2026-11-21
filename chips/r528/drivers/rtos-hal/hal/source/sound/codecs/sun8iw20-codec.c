@@ -1141,6 +1141,15 @@ static int sunxi_codec_startup(struct snd_pcm_substream *substream,
 {
 	snd_print("\n");
 
+	/* Force the DAPM route (DAC analog enables + external speaker PA) to
+	 * re-run on every open. A previous close should set dapm_state back to
+	 * 0, but if any path leaves it stuck at 1, the next prepare's
+	 * dapm_control(1) short-circuits and the analog path stays off -- the
+	 * symptom is "only the first playback is audible, later ones silent".
+	 * Resetting here is harmless: the field only gates that early-return.
+	 */
+	substream->dapm_state = 0;
+
 	return 0;
 }
 
@@ -1284,17 +1293,27 @@ static int sunxi_codec_set_sysclk(struct snd_dai *dai,
 {
 	struct snd_codec *codec = dai->component;
 	struct sunxi_codec_info *sunxi_codec = codec->private_data;
+	unsigned int cur;
 
 	if (dir == SNDRV_PCM_STREAM_PLAYBACK) {
-		hal_clock_disable(sunxi_codec->moduleclk);
-		if (freq == 24576000) {
-			hal_clk_set_parent(sunxi_codec->moduleclk, sunxi_codec->pllclk1);
-		} else {
-			hal_clk_set_parent(sunxi_codec->moduleclk, sunxi_codec->pllclk);
+		/* If the DAC clock is already at the requested rate, leave it
+		 * alone. The disable -> re-parent -> re-rate -> enable cycle can
+		 * itself glitch the codec DAC clock on a 2nd+ open, which shows up
+		 * as a silent follow-up playback. Re-configure only when the rate
+		 * actually differs.
+		 */
+		cur = hal_clk_get_rate(sunxi_codec->moduleclk);
+		if (cur != freq) {
+			hal_clock_disable(sunxi_codec->moduleclk);
+			if (freq == 24576000) {
+				hal_clk_set_parent(sunxi_codec->moduleclk, sunxi_codec->pllclk1);
+			} else {
+				hal_clk_set_parent(sunxi_codec->moduleclk, sunxi_codec->pllclk);
+			}
+			hal_clk_set_rate(sunxi_codec->moduleclk, freq);
+			hal_msleep(50);
+			hal_clock_enable(sunxi_codec->moduleclk);
 		}
-		hal_clk_set_rate(sunxi_codec->moduleclk, freq);
-		hal_msleep(50);
-		hal_clock_enable(sunxi_codec->moduleclk);
 	}
 
 	if (dir == SNDRV_PCM_STREAM_CAPTURE) {

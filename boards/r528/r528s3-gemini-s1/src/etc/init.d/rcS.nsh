@@ -92,6 +92,13 @@ fi
 luncher_mini &
 #endif
 
+#ifdef CONFIG_KID_BUDDY_APP
+echo "Starting kid_buddy..."
+kid_buddy &
+sleep 2
+ai_agent --no-cli &
+#endif
+
 #ifdef CONFIG_BLUETOOTH_SERVER
 sleep 8
 echo "Starting bluetoothd..." 
