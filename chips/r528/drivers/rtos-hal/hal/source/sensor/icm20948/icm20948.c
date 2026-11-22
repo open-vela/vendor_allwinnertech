@@ -1227,9 +1227,13 @@ static int icm20948_acce_activate_locked(FAR struct icm20948_dev_s *priv,
 
       priv->acce_enabled = false;
       priv->acce_work_started = false;
-      work_cancel_sync(HPWORK, &priv->acce_work);
 
-      icm20948_sleep_if_idle(priv);
+      /* A running worker performs the sleep itself, do not wait. */
+
+      if (work_cancel(HPWORK, &priv->acce_work) != -EBUSY)
+        {
+          icm20948_sleep_if_idle(priv);
+        }
     }
 
   return OK;
@@ -1301,9 +1305,11 @@ static int icm20948_gyro_activate_locked(FAR struct icm20948_dev_s *priv,
 
       priv->gyro_enabled = false;
       priv->gyro_work_started = false;
-      work_cancel_sync(HPWORK, &priv->gyro_work);
 
-      icm20948_sleep_if_idle(priv);
+      if (work_cancel(HPWORK, &priv->gyro_work) != -EBUSY)
+        {
+          icm20948_sleep_if_idle(priv);
+        }
     }
 
   return OK;
@@ -1375,9 +1381,11 @@ static int icm20948_magn_activate_locked(FAR struct icm20948_dev_s *priv,
 
       priv->magn_enabled = false;
       priv->magn_work_started = false;
-      work_cancel_sync(HPWORK, &priv->magn_work);
 
-      icm20948_sleep_if_idle(priv);
+      if (work_cancel(HPWORK, &priv->magn_work) != -EBUSY)
+        {
+          icm20948_sleep_if_idle(priv);
+        }
     }
 
   return OK;
@@ -1408,10 +1416,21 @@ static void icm20948_acce_worker(FAR void *arg)
     0
   };
 
-  if (priv == NULL || !priv->acce_work_started || !priv->acce_enabled)
+  if (priv == NULL)
     {
       return;
     }
+
+  nxmutex_lock(&priv->statelock);
+
+  if (!priv->acce_work_started || !priv->acce_enabled)
+    {
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
+      return;
+    }
+
+  nxmutex_unlock(&priv->statelock);
 
   icm20948_acce_value_t acce;
 
@@ -1447,13 +1466,20 @@ static void icm20948_acce_worker(FAR void *arg)
         sizeof(struct sensor_accel));
     }
 
+  nxmutex_lock(&priv->statelock);
+
   if (priv->acce_work_started && priv->acce_enabled)
     {
       work_queue(HPWORK, &priv->acce_work, icm20948_acce_worker, priv,
                  USEC2TICK(priv->acce_interval));
+      nxmutex_unlock(&priv->statelock);
     }
   else
     {
+      /* The disable path left the transition to this worker. */
+
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
       sninfo("ICM20948: Worker stopping (started=%d, enabled=%d)\n",
              priv->acce_work_started, priv->acce_enabled);
     }
@@ -1467,10 +1493,21 @@ static void icm20948_gyro_worker(FAR void *arg)
     0
   };
 
-  if (priv == NULL || !priv->gyro_work_started || !priv->gyro_enabled)
+  if (priv == NULL)
     {
       return;
     }
+
+  nxmutex_lock(&priv->statelock);
+
+  if (!priv->gyro_work_started || !priv->gyro_enabled)
+    {
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
+      return;
+    }
+
+  nxmutex_unlock(&priv->statelock);
 
   icm20948_gyro_value_t gyro;
 
@@ -1506,13 +1543,18 @@ static void icm20948_gyro_worker(FAR void *arg)
         sizeof(struct sensor_gyro));
     }
 
+  nxmutex_lock(&priv->statelock);
+
   if (priv->gyro_work_started && priv->gyro_enabled)
     {
       work_queue(HPWORK, &priv->gyro_work, icm20948_gyro_worker, priv,
                  USEC2TICK(priv->gyro_interval));
+      nxmutex_unlock(&priv->statelock);
     }
   else
     {
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
       sninfo("ICM20948: Worker stopping (started=%d, enabled=%d)\n",
              priv->gyro_work_started, priv->gyro_enabled);
     }
@@ -1526,10 +1568,21 @@ static void icm20948_magn_worker(FAR void *arg)
     0
   };
 
-  if (priv == NULL || !priv->magn_work_started || !priv->magn_enabled)
+  if (priv == NULL)
     {
       return;
     }
+
+  nxmutex_lock(&priv->statelock);
+
+  if (!priv->magn_work_started || !priv->magn_enabled)
+    {
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
+      return;
+    }
+
+  nxmutex_unlock(&priv->statelock);
 
   uint8_t ret;
   icm20948_magn_value_t magn;
@@ -1565,13 +1618,18 @@ static void icm20948_magn_worker(FAR void *arg)
         sizeof(struct sensor_mag));
     }
 
+  nxmutex_lock(&priv->statelock);
+
   if (priv->magn_work_started && priv->magn_enabled)
     {
       work_queue(HPWORK, &priv->magn_work, icm20948_magn_worker, priv,
                  USEC2TICK(priv->magn_interval));
+      nxmutex_unlock(&priv->statelock);
     }
   else
     {
+      icm20948_sleep_if_idle(priv);
+      nxmutex_unlock(&priv->statelock);
       sninfo("ICM20948: Worker stopping (started=%d, enabled=%d)\n",
              priv->magn_work_started, priv->magn_enabled);
     }
