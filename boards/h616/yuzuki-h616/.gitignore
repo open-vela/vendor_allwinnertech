@@ -1,0 +1,9 @@
+*.o
+*.depend
+Make.dep
+libboard.a
+tags
+cscope.*
+.built
+etctmp.c
+etctmp
