@@ -1,0 +1,12 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config ARCH_BOARD_YUZUKI_H616
+	bool "Allwinner H616 based Yuzuki board"
+	depends on ARCH_CHIP_H616
+	---help---
+		NuttX port for the Allwinner H616 based Yuzuki board.
+		On-board peripherals: 1GB/2GB/4GB DDR3L, eMMC (HS400 on 4-bit
+		bus), 4x 16550 UART, USB, HDMI.
